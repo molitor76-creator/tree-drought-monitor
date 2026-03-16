@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
+
 <title>Tree Drought Monitor</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </head>
 
 <body>
@@ -20,17 +22,22 @@ const text=await response.text()
 
 const rows=text.split("\n").slice(1)
 
-let labels=[]
-let values=[]
+let dates=[]
+let g=[]
+let w=[]
+let d=[]
 
 rows.forEach(r=>{
 
 const c=r.split(",")
 
-if(c.length>2){
+if(c.length>3){
 
-labels.push(c[0])
-values.push(parseFloat(c[1]))
+dates.push(c[0])
+
+if(c[1]=="Gauting"){g.push(parseFloat(c[2]))}
+if(c[1]=="Waging am See"){w.push(parseFloat(c[2]))}
+if(c[1]=="Dettenhausen"){d.push(parseFloat(c[2]))}
 
 }
 
@@ -42,15 +49,15 @@ type:"line",
 
 data:{
 
-labels:labels,
+labels:dates,
 
-datasets:[{
+datasets:[
 
-label:"Water Storage",
+{label:"Gauting",data:g},
+{label:"Waging am See",data:w},
+{label:"Dettenhausen",data:d}
 
-data:values
-
-}]
+]
 
 }
 
