@@ -2,22 +2,18 @@
 <html>
 
 <head>
-
 <title>Tree Drought Monitor</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-
 body{
 font-family:Arial;
 margin:40px;
 }
-
 canvas{
 max-width:900px;
-margin-bottom:40px;
+margin-bottom:50px;
 }
-
 </style>
 
 </head>
@@ -26,7 +22,7 @@ margin-bottom:40px;
 
 <h1>Tree Drought Monitor</h1>
 
-<h2>Estimated Soil Water Storage</h2>
+<h2>Water Storage Estimate</h2>
 <canvas id="storageChart"></canvas>
 
 <h2>Drought Stress Level</h2>
@@ -36,10 +32,10 @@ margin-bottom:40px;
 
 async function loadData(){
 
-const response = await fetch("data/history.csv")
-const text = await response.text()
+const response = await fetch("data/history.csv");
+const text = await response.text();
 
-const rows = text.trim().split("\n").slice(1)
+const rows = text.trim().split("\n").slice(1);
 
 let dates=[]
 let g=[]
@@ -68,21 +64,35 @@ const location=c[1]
 const storage=parseFloat(c[2])
 const stress=c[4]
 
-if(!dates.includes(date)) dates.push(date)
+if(!dates.includes(date)){
+
+dates.push(date)
+
+g.push(null)
+w.push(null)
+d.push(null)
+
+gStress.push(null)
+wStress.push(null)
+dStress.push(null)
+
+}
+
+let i=dates.indexOf(date)
 
 if(location==="Gauting"){
-g.push(storage)
-gStress.push(stressMap[stress])
+g[i]=storage
+gStress[i]=stressMap[stress]
 }
 
 if(location==="Waging am See"){
-w.push(storage)
-wStress.push(stressMap[stress])
+w[i]=storage
+wStress[i]=stressMap[stress]
 }
 
 if(location==="Dettenhausen"){
-d.push(storage)
-dStress.push(stressMap[stress])
+d[i]=storage
+dStress[i]=stressMap[stress]
 }
 
 })
@@ -94,31 +104,9 @@ type:"line",
 data:{
 labels:dates,
 datasets:[
-
-{
-label:"Gauting",
-data:g,
-borderColor:"red",
-pointRadius:6,
-fill:false
-},
-
-{
-label:"Waging am See",
-data:w,
-borderColor:"blue",
-pointRadius:6,
-fill:false
-},
-
-{
-label:"Dettenhausen",
-data:d,
-borderColor:"green",
-pointRadius:6,
-fill:false
-}
-
+{label:"Gauting",data:g,borderColor:"red",pointRadius:6,fill:false},
+{label:"Waging am See",data:w,borderColor:"blue",pointRadius:6,fill:false},
+{label:"Dettenhausen",data:d,borderColor:"green",pointRadius:6,fill:false}
 ]
 },
 
@@ -134,31 +122,9 @@ type:"line",
 data:{
 labels:dates,
 datasets:[
-
-{
-label:"Gauting",
-data:gStress,
-borderColor:"red",
-pointRadius:6,
-fill:false
-},
-
-{
-label:"Waging am See",
-data:wStress,
-borderColor:"blue",
-pointRadius:6,
-fill:false
-},
-
-{
-label:"Dettenhausen",
-data:dStress,
-borderColor:"green",
-pointRadius:6,
-fill:false
-}
-
+{label:"Gauting",data:gStress,borderColor:"red",pointRadius:6,fill:false},
+{label:"Waging am See",data:wStress,borderColor:"blue",pointRadius:6,fill:false},
+{label:"Dettenhausen",data:dStress,borderColor:"green",pointRadius:6,fill:false}
 ]
 },
 
@@ -167,15 +133,13 @@ responsive:true,
 scales:{
 y:{
 ticks:{
-callback:function(value){
+callback:function(v){
+return ["LOW","MODERATE","HIGH","SEVERE"][v]
+}
+}
+}
+}
 
-const map=["LOW","MODERATE","HIGH","SEVERE"]
-return map[value]
-
-}
-}
-}
-}
 }
 
 })
@@ -187,5 +151,4 @@ loadData()
 </script>
 
 </body>
-
 </html>
