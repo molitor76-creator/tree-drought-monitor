@@ -3,6 +3,8 @@ import os
 import pandas as pd
 from datetime import date
 
+today=str(date.today())
+
 locations = {
     "Gauting": {"lat":48.067,"lon":11.377},
     "Waging am See": {"lat":47.933,"lon":12.733},
@@ -29,39 +31,33 @@ def tree_stress(rh,eh,rf,ef):
 
     storage=rh-eh
     forecast=rf-ef
-
     score=storage+forecast
 
     if score>40:
         level="LOW"
-        advice="No watering needed"
     elif score>10:
         level="MODERATE"
-        advice="Monitor soil moisture"
     elif score>-10:
         level="HIGH"
-        advice="Water trees if soil feels dry"
     else:
         level="SEVERE"
-        advice="Water trees deeply"
 
-    return storage,forecast,level,advice
+    return storage,forecast,level
 
 
-data=[]
+rows=[]
 alerts=[]
-
 
 for name,coords in locations.items():
 
     rh,eh,rf,ef=weather_data(coords["lat"],coords["lon"])
-
-    storage,forecast,level,advice=tree_stress(rh,eh,rf,ef)
+    storage,forecast,level=tree_stress(rh,eh,rf,ef)
 
     if level=="SEVERE":
         alerts.append(name)
 
-    data.append({
+    rows.append({
+        "date":today,
         "location":name,
         "storage":storage,
         "forecast":forecast,
@@ -69,44 +65,38 @@ for name,coords in locations.items():
     })
 
 
-report=f"Weekly Tree Drought Monitor\nDate: {date.today()}\n\n"
-
-
-for d in data:
-
-    report+=f"""
-{d['location']}
-
-Estimated soil storage: {d['storage']:.1f}
-Forecast balance: {d['forecast']:.1f}
-
-Stress level: {d['stress']}
-
-"""
-
-
-os.makedirs("reports",exist_ok=True)
-
-report_file=f"reports/{date.today()}-report.md"
-
-with open(report_file,"w") as f:
-    f.write(report)
-
-
-df=pd.DataFrame(data)
+df=pd.DataFrame(rows)
 
 os.makedirs("data",exist_ok=True)
-
 history_file="data/history.csv"
-
 
 if os.path.exists(history_file):
 
     old=pd.read_csv(history_file)
     df=pd.concat([old,df])
 
+df=df.drop_duplicates(subset=["date","location"])
 
 df.to_csv(history_file,index=False)
+
+
+report=f"Weekly Tree Drought Monitor\nDate: {today}\n\n"
+
+for r in rows:
+
+    report+=f"""
+{r['location']}
+
+Storage estimate: {r['storage']:.1f}
+Forecast balance: {r['forecast']:.1f}
+
+Stress level: {r['stress']}
+"""
+
+os.makedirs("reports",exist_ok=True)
+
+with open(f"reports/{today}-report.md","w") as f:
+    f.write(report)
 
 
 if alerts:
