@@ -1,9 +1,23 @@
 <!DOCTYPE html>
 <html>
-<head>
 
+<head>
 <title>Tree Drought Monitor</title>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+margin:40px;
+}
+
+canvas{
+max-width:900px;
+}
+
+</style>
 
 </head>
 
@@ -11,63 +25,96 @@
 
 <h1>Tree Drought Monitor</h1>
 
+<p>Water storage estimate (mm)</p>
+
 <canvas id="chart"></canvas>
 
 <script>
 
 async function loadData(){
 
-const response=await fetch("data/history.csv")
-const text=await response.text()
+const response = await fetch("data/history.csv");
+const text = await response.text();
 
-const rows=text.split("\n").slice(1)
+const rows = text.trim().split("\n").slice(1);
 
-let dates=[]
-let g=[]
-let w=[]
-let d=[]
+let dates = [];
+let gauting = [];
+let waging = [];
+let dettenhausen = [];
 
-rows.forEach(r=>{
+rows.forEach(row => {
 
-const c=r.split(",")
+const c = row.split(",");
 
-if(c.length>3){
+if(c.length < 4) return;
 
-dates.push(c[0])
+const date = c[0];
+const location = c[1];
+const storage = parseFloat(c[2]);
 
-if(c[1]=="Gauting"){g.push(parseFloat(c[2]))}
-if(c[1]=="Waging am See"){w.push(parseFloat(c[2]))}
-if(c[1]=="Dettenhausen"){d.push(parseFloat(c[2]))}
+if(!dates.includes(date)) dates.push(date);
 
-}
+if(location === "Gauting") gauting.push(storage);
+if(location === "Waging am See") waging.push(storage);
+if(location === "Dettenhausen") dettenhausen.push(storage);
 
-})
+});
 
 new Chart(document.getElementById("chart"),{
 
 type:"line",
 
 data:{
-
 labels:dates,
-
 datasets:[
 
-{label:"Gauting",data:g},
-{label:"Waging am See",data:w},
-{label:"Dettenhausen",data:d}
+{
+label:"Gauting",
+data:gauting,
+borderColor:"red",
+fill:false
+},
+
+{
+label:"Waging am See",
+data:waging,
+borderColor:"blue",
+fill:false
+},
+
+{
+label:"Dettenhausen",
+data:dettenhausen,
+borderColor:"green",
+fill:false
+}
 
 ]
 
+},
+
+options:{
+responsive:true,
+scales:{
+y:{
+title:{
+display:true,
+text:"Water storage estimate (mm)"
+}
+}
 }
 
-})
+}
+
+});
 
 }
 
-loadData()
+loadData();
 
 </script>
 
 </body>
+
 </html>
