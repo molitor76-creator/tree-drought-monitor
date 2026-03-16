@@ -2,8 +2,8 @@
 <html>
 
 <head>
-<title>Tree Drought Monitor</title>
 
+<title>Tree Drought Monitor</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -15,6 +15,7 @@ margin:40px;
 
 canvas{
 max-width:900px;
+margin-bottom:40px;
 }
 
 </style>
@@ -25,43 +26,68 @@ max-width:900px;
 
 <h1>Tree Drought Monitor</h1>
 
-<p>Water storage estimate (mm)</p>
+<h2>Estimated Soil Water Storage</h2>
+<canvas id="storageChart"></canvas>
 
-<canvas id="chart"></canvas>
+<h2>Drought Stress Level</h2>
+<canvas id="stressChart"></canvas>
 
 <script>
 
 async function loadData(){
 
-const response = await fetch("data/history.csv");
-const text = await response.text();
+const response = await fetch("data/history.csv")
+const text = await response.text()
 
-const rows = text.trim().split("\n").slice(1);
+const rows = text.trim().split("\n").slice(1)
 
-let dates = [];
-let gauting = [];
-let waging = [];
-let dettenhausen = [];
+let dates=[]
+let g=[]
+let w=[]
+let d=[]
 
-rows.forEach(row => {
+let gStress=[]
+let wStress=[]
+let dStress=[]
 
-const c = row.split(",");
+const stressMap={
+"LOW":0,
+"MODERATE":1,
+"HIGH":2,
+"SEVERE":3
+}
 
-if(c.length < 4) return;
+rows.forEach(row=>{
 
-const date = c[0];
-const location = c[1];
-const storage = parseFloat(c[2]);
+const c=row.split(",")
 
-if(!dates.includes(date)) dates.push(date);
+if(c.length<5) return
 
-if(location === "Gauting") gauting.push(storage);
-if(location === "Waging am See") waging.push(storage);
-if(location === "Dettenhausen") dettenhausen.push(storage);
+const date=c[0]
+const location=c[1]
+const storage=parseFloat(c[2])
+const stress=c[4]
 
-});
+if(!dates.includes(date)) dates.push(date)
 
-new Chart(document.getElementById("chart"),{
+if(location==="Gauting"){
+g.push(storage)
+gStress.push(stressMap[stress])
+}
+
+if(location==="Waging am See"){
+w.push(storage)
+wStress.push(stressMap[stress])
+}
+
+if(location==="Dettenhausen"){
+d.push(storage)
+dStress.push(stressMap[stress])
+}
+
+})
+
+new Chart(document.getElementById("storageChart"),{
 
 type:"line",
 
@@ -71,47 +97,92 @@ datasets:[
 
 {
 label:"Gauting",
-data:gauting,
+data:g,
 borderColor:"red",
+pointRadius:6,
 fill:false
 },
 
 {
 label:"Waging am See",
-data:waging,
+data:w,
 borderColor:"blue",
+pointRadius:6,
 fill:false
 },
 
 {
 label:"Dettenhausen",
-data:dettenhausen,
+data:d,
 borderColor:"green",
+pointRadius:6,
 fill:false
 }
 
 ]
+},
 
+options:{responsive:true}
+
+})
+
+
+new Chart(document.getElementById("stressChart"),{
+
+type:"line",
+
+data:{
+labels:dates,
+datasets:[
+
+{
+label:"Gauting",
+data:gStress,
+borderColor:"red",
+pointRadius:6,
+fill:false
+},
+
+{
+label:"Waging am See",
+data:wStress,
+borderColor:"blue",
+pointRadius:6,
+fill:false
+},
+
+{
+label:"Dettenhausen",
+data:dStress,
+borderColor:"green",
+pointRadius:6,
+fill:false
+}
+
+]
 },
 
 options:{
 responsive:true,
 scales:{
 y:{
-title:{
-display:true,
-text:"Water storage estimate (mm)"
+ticks:{
+callback:function(value){
+
+const map=["LOW","MODERATE","HIGH","SEVERE"]
+return map[value]
+
+}
+}
 }
 }
 }
 
-}
-
-});
+})
 
 }
 
-loadData();
+loadData()
 
 </script>
 
