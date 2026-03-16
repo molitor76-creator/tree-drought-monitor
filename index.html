@@ -4,7 +4,6 @@
 <head>
 
 <title>Tree Drought Monitor</title>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -12,7 +11,7 @@
 body{
 font-family:Arial;
 margin:40px;
-background:#f5f5f5;
+background:#f3f6fb;
 }
 
 h1{
@@ -26,22 +25,32 @@ margin-bottom:40px;
 }
 
 .card{
+flex:1;
 background:white;
 padding:20px;
 border-radius:10px;
-box-shadow:0 2px 6px rgba(0,0,0,0.15);
-width:200px;
+box-shadow:0 4px 10px rgba(0,0,0,0.1);
 }
 
 .card h3{
 margin-top:0;
 }
 
+.status{
+font-size:24px;
+font-weight:bold;
+}
+
+.low{color:green;}
+.moderate{color:orange;}
+.high{color:red;}
+.severe{color:darkred;}
+
 canvas{
 background:white;
 padding:20px;
 border-radius:10px;
-box-shadow:0 2px 6px rgba(0,0,0,0.15);
+box-shadow:0 4px 10px rgba(0,0,0,0.1);
 margin-bottom:40px;
 max-width:900px;
 }
@@ -58,17 +67,17 @@ max-width:900px;
 
 <div class="card">
 <h3>Gauting</h3>
-<p id="gautingStatus">Loading...</p>
+<div id="gautingStatus" class="status">Loading...</div>
 </div>
 
 <div class="card">
 <h3>Waging am See</h3>
-<p id="wagingStatus">Loading...</p>
+<div id="wagingStatus" class="status">Loading...</div>
 </div>
 
 <div class="card">
 <h3>Dettenhausen</h3>
-<p id="dettenhausenStatus">Loading...</p>
+<div id="dettenhausenStatus" class="status">Loading...</div>
 </div>
 
 </div>
@@ -76,33 +85,28 @@ max-width:900px;
 <h2>Water Storage Trend</h2>
 <canvas id="storageChart"></canvas>
 
-<h2>Drought Stress Level</h2>
+<h2>Drought Stress Trend</h2>
 <canvas id="stressChart"></canvas>
 
 <script>
 
 async function loadData(){
 
-const response=await fetch("data/history.csv")
-const text=await response.text()
+const response = await fetch("data/history.csv")
+const text = await response.text()
 
-const rows=text.trim().split("\n").slice(1)
+const rows = text.trim().split("\n").slice(1)
 
 let dates=[]
 
-let g=[]
-let w=[]
-let d=[]
-
-let gStress=[]
-let wStress=[]
-let dStress=[]
+let g=[], w=[], d=[]
+let gStress=[], wStress=[], dStress=[]
 
 const stressMap={
-"LOW":0,
-"MODERATE":1,
-"HIGH":2,
-"SEVERE":3
+LOW:0,
+MODERATE:1,
+HIGH:2,
+SEVERE:3
 }
 
 const stressLabel=["LOW","MODERATE","HIGH","SEVERE"]
@@ -110,8 +114,6 @@ const stressLabel=["LOW","MODERATE","HIGH","SEVERE"]
 rows.forEach(row=>{
 
 const c=row.split(",")
-
-if(c.length<5) return
 
 const date=c[0]
 const location=c[1]
@@ -151,14 +153,23 @@ dStress[i]=stressMap[stress]
 
 })
 
-document.getElementById("gautingStatus").innerText =
-stressLabel[gStress[gStress.length-1]]
+let lastIndex = dates.length - 1
 
-document.getElementById("wagingStatus").innerText =
-stressLabel[wStress[wStress.length-1]]
+function setStatus(id,value){
 
-document.getElementById("dettenhausenStatus").innerText =
-stressLabel[dStress[dStress.length-1]]
+let el=document.getElementById(id)
+
+el.innerText=value
+
+el.classList.remove("low","moderate","high","severe")
+
+el.classList.add(value.toLowerCase())
+
+}
+
+setStatus("gautingStatus", stressLabel[gStress[lastIndex]])
+setStatus("wagingStatus", stressLabel[wStress[lastIndex]])
+setStatus("dettenhausenStatus", stressLabel[dStress[lastIndex]])
 
 new Chart(document.getElementById("storageChart"),{
 
@@ -167,15 +178,10 @@ type:"line",
 data:{
 labels:dates,
 datasets:[
-
-{label:"Gauting",data:g,borderColor:"red",pointRadius:6,fill:false},
-
-{label:"Waging am See",data:w,borderColor:"blue",pointRadius:6,fill:false},
-
-{label:"Dettenhausen",data:d,borderColor:"green",pointRadius:6,fill:false}
-
+{label:"Gauting",data:g,borderColor:"red",pointRadius:6},
+{label:"Waging am See",data:w,borderColor:"blue",pointRadius:6},
+{label:"Dettenhausen",data:d,borderColor:"green",pointRadius:6}
 ]
-
 },
 
 options:{responsive:true}
@@ -190,20 +196,14 @@ type:"line",
 data:{
 labels:dates,
 datasets:[
-
-{label:"Gauting",data:gStress,borderColor:"red",pointRadius:6,fill:false},
-
-{label:"Waging am See",data:wStress,borderColor:"blue",pointRadius:6,fill:false},
-
-{label:"Dettenhausen",data:dStress,borderColor:"green",pointRadius:6,fill:false}
-
+{label:"Gauting",data:gStress,borderColor:"red",pointRadius:6},
+{label:"Waging am See",data:wStress,borderColor:"blue",pointRadius:6},
+{label:"Dettenhausen",data:dStress,borderColor:"green",pointRadius:6}
 ]
-
 },
 
 options:{
 responsive:true,
-
 scales:{
 y:{
 ticks:{
@@ -225,5 +225,4 @@ loadData()
 </script>
 
 </body>
-
 </html>
