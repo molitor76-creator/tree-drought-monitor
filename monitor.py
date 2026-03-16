@@ -9,6 +9,7 @@ locations = {
     "Dettenhausen": {"lat":48.605,"lon":9.106}
 }
 
+
 def weather_data(lat,lon):
 
     url=f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=30&timezone=Europe%2FBerlin"
@@ -39,7 +40,7 @@ def tree_stress(rh,eh,rf,ef):
         advice="Monitor soil moisture"
     elif score>-10:
         level="HIGH"
-        advice="Water trees if soil dry"
+        advice="Water trees if soil feels dry"
     else:
         level="SEVERE"
         advice="Water trees deeply"
@@ -48,12 +49,17 @@ def tree_stress(rh,eh,rf,ef):
 
 
 data=[]
+alerts=[]
+
 
 for name,coords in locations.items():
 
     rh,eh,rf,ef=weather_data(coords["lat"],coords["lon"])
 
     storage,forecast,level,advice=tree_stress(rh,eh,rf,ef)
+
+    if level=="SEVERE":
+        alerts.append(name)
 
     data.append({
         "location":name,
@@ -62,38 +68,51 @@ for name,coords in locations.items():
         "stress":level
     })
 
+
 report=f"Weekly Tree Drought Monitor\nDate: {date.today()}\n\n"
+
 
 for d in data:
 
     report+=f"""
 {d['location']}
 
-Water storage estimate: {d['storage']:.1f}
+Estimated soil storage: {d['storage']:.1f}
 Forecast balance: {d['forecast']:.1f}
 
 Stress level: {d['stress']}
+
 """
 
 
 os.makedirs("reports",exist_ok=True)
 
-filename=f"reports/{date.today()}-report.md"
+report_file=f"reports/{date.today()}-report.md"
 
-with open(filename,"w") as f:
+with open(report_file,"w") as f:
     f.write(report)
+
 
 df=pd.DataFrame(data)
 
 os.makedirs("data",exist_ok=True)
 
-csv_file="data/history.csv"
+history_file="data/history.csv"
 
-if os.path.exists(csv_file):
 
-    old=pd.read_csv(csv_file)
+if os.path.exists(history_file):
+
+    old=pd.read_csv(history_file)
     df=pd.concat([old,df])
 
-df.to_csv(csv_file,index=False)
+
+df.to_csv(history_file,index=False)
+
+
+if alerts:
+
+    with open("alert.txt","w") as f:
+        f.write(",".join(alerts))
+
 
 print(report)
