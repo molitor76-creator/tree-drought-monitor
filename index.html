@@ -2,18 +2,50 @@
 <html>
 
 <head>
+
 <title>Tree Drought Monitor</title>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
+
 body{
 font-family:Arial;
 margin:40px;
+background:#f5f5f5;
 }
+
+h1{
+margin-bottom:20px;
+}
+
+.cards{
+display:flex;
+gap:20px;
+margin-bottom:40px;
+}
+
+.card{
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 2px 6px rgba(0,0,0,0.15);
+width:200px;
+}
+
+.card h3{
+margin-top:0;
+}
+
 canvas{
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 2px 6px rgba(0,0,0,0.15);
+margin-bottom:40px;
 max-width:900px;
-margin-bottom:50px;
 }
+
 </style>
 
 </head>
@@ -22,7 +54,26 @@ margin-bottom:50px;
 
 <h1>Tree Drought Monitor</h1>
 
-<h2>Water Storage Estimate</h2>
+<div class="cards">
+
+<div class="card">
+<h3>Gauting</h3>
+<p id="gautingStatus">Loading...</p>
+</div>
+
+<div class="card">
+<h3>Waging am See</h3>
+<p id="wagingStatus">Loading...</p>
+</div>
+
+<div class="card">
+<h3>Dettenhausen</h3>
+<p id="dettenhausenStatus">Loading...</p>
+</div>
+
+</div>
+
+<h2>Water Storage Trend</h2>
 <canvas id="storageChart"></canvas>
 
 <h2>Drought Stress Level</h2>
@@ -32,12 +83,13 @@ margin-bottom:50px;
 
 async function loadData(){
 
-const response = await fetch("data/history.csv");
-const text = await response.text();
+const response=await fetch("data/history.csv")
+const text=await response.text()
 
-const rows = text.trim().split("\n").slice(1);
+const rows=text.trim().split("\n").slice(1)
 
 let dates=[]
+
 let g=[]
 let w=[]
 let d=[]
@@ -52,6 +104,8 @@ const stressMap={
 "HIGH":2,
 "SEVERE":3
 }
+
+const stressLabel=["LOW","MODERATE","HIGH","SEVERE"]
 
 rows.forEach(row=>{
 
@@ -97,6 +151,15 @@ dStress[i]=stressMap[stress]
 
 })
 
+document.getElementById("gautingStatus").innerText =
+stressLabel[gStress[gStress.length-1]]
+
+document.getElementById("wagingStatus").innerText =
+stressLabel[wStress[wStress.length-1]]
+
+document.getElementById("dettenhausenStatus").innerText =
+stressLabel[dStress[dStress.length-1]]
+
 new Chart(document.getElementById("storageChart"),{
 
 type:"line",
@@ -104,10 +167,15 @@ type:"line",
 data:{
 labels:dates,
 datasets:[
+
 {label:"Gauting",data:g,borderColor:"red",pointRadius:6,fill:false},
+
 {label:"Waging am See",data:w,borderColor:"blue",pointRadius:6,fill:false},
+
 {label:"Dettenhausen",data:d,borderColor:"green",pointRadius:6,fill:false}
+
 ]
+
 },
 
 options:{responsive:true}
@@ -122,19 +190,25 @@ type:"line",
 data:{
 labels:dates,
 datasets:[
+
 {label:"Gauting",data:gStress,borderColor:"red",pointRadius:6,fill:false},
+
 {label:"Waging am See",data:wStress,borderColor:"blue",pointRadius:6,fill:false},
+
 {label:"Dettenhausen",data:dStress,borderColor:"green",pointRadius:6,fill:false}
+
 ]
+
 },
 
 options:{
 responsive:true,
+
 scales:{
 y:{
 ticks:{
 callback:function(v){
-return ["LOW","MODERATE","HIGH","SEVERE"][v]
+return stressLabel[v]
 }
 }
 }
@@ -151,4 +225,5 @@ loadData()
 </script>
 
 </body>
+
 </html>
