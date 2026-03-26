@@ -99,9 +99,9 @@ border-radius:10px;
 <script>
 
 const locations={
-"Gauting":{lat:48.067,lon:11.377,cap:100},
-"Waging am See":{lat:47.933,lon:12.733,cap:70},
-"Dettenhausen":{lat:48.605,lon:9.106,cap:180}
+"Gauting":{lat:48.067,lon:11.377},
+"Waging am See":{lat:47.933,lon:12.733},
+"Dettenhausen":{lat:48.605,lon:9.106}
 }
 
 async function load(){
@@ -111,73 +111,126 @@ const t=await r.text()
 
 const rows=t.trim().split("\n").slice(1)
 
-let dates=[]
-let g=[],w=[],d=[]
-let gI=[],wI=[],dI=[]
-let gR,wR,dR
+let data={}
 
 rows.forEach(row=>{
 
 const c=row.split(",")
 
-const date=c[0]
-const loc=c[1]
-const s=parseFloat(c[2])
-const irr=parseFloat(c[5])
-const risk=c[6]
+data[c[1]]={
+storage:parseFloat(c[2]),
+future:parseFloat(c[3]),
+stress:c[4],
+irrigation:parseFloat(c[5]),
+risk:c[6]
+}
+
+})
+
+updateCard("Gauting","gStatus","gReco",data["Gauting"])
+updateCard("Waging am See","wStatus","wReco",data["Waging am See"])
+updateCard("Dettenhausen","dStatus","dReco",data["Dettenhausen"])
+
+drawMap(data)
+
+drawTrend(rows)
+
+}
+
+function updateCard(name,idStatus,idReco,d){
+
+let s=document.getElementById(idStatus)
+let r=document.getElementById(idReco)
+
+if(d.risk==="NOW"){
+
+s.innerText="⚠ WATER NOW"
+s.className="status now"
+
+r.innerText="Recommended: "+d.irrigation+" mm"
+
+}
+
+else if(d.risk==="SOON"){
+
+s.innerText="⚠ Water likely soon"
+s.className="status soon"
+
+r.innerText=""
+
+}
+
+else{
+
+s.innerText="OK"
+s.className="status safe"
+
+r.innerText=""
+
+}
+
+}
+
+function drawMap(data){
+
+const map=L.map('map').setView([48.2,11.6],7)
+
+L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+).addTo(map)
+
+function color(r){
+
+if(r==="SAFE") return "green"
+if(r==="SOON") return "orange"
+return "red"
+
+}
+
+Object.keys(locations).forEach(name=>{
+
+const loc=locations[name]
+
+L.circleMarker(
+[loc.lat,loc.lon],
+{color:color(data[name].risk),radius:8}
+).addTo(map).bindPopup(name)
+
+})
+
+}
+
+function drawTrend(rows){
+
+let dates=[]
+let g=[]
+let w=[]
+let d=[]
+
+rows.forEach(row=>{
+
+const c=row.split(",")
+
+let date=c[0]
+let loc=c[1]
+let s=parseFloat(c[2])
 
 if(!dates.includes(date)){
 
 dates.push(date)
-
 g.push(null)
 w.push(null)
 d.push(null)
-
-gI.push(null)
-wI.push(null)
-dI.push(null)
 
 }
 
 let i=dates.indexOf(date)
 
-if(loc=="Gauting"){g[i]=s;gI[i]=irr;gR=risk}
-if(loc=="Waging am See"){w[i]=s;wI[i]=irr;wR=risk}
-if(loc=="Dettenhausen"){d[i]=s;dI[i]=irr;dR=risk}
+if(loc==="Gauting") g[i]=s
+if(loc==="Waging am See") w[i]=s
+if(loc==="Dettenhausen") d[i]=s
 
 })
-
-let last=dates.length-1
-
-function card(risk,irr,idStatus,idReco){
-
-let s=document.getElementById(idStatus)
-let r=document.getElementById(idReco)
-
-if(risk=="NOW"){
-s.innerText="⚠ WATER NOW"
-s.className="status now"
-r.innerText="Recommended: "+irr+" mm"
-}
-
-else if(risk=="SOON"){
-s.innerText="⚠ Water likely needed soon"
-s.className="status soon"
-r.innerText=""
-}
-
-else{
-s.innerText="OK"
-s.className="status safe"
-r.innerText=""
-}
-
-}
-
-card(gR,gI[last],"gStatus","gReco")
-card(wR,wI[last],"wStatus","wReco")
-card(dR,dI[last],"dStatus","dReco")
 
 new Chart(document.getElementById("chart"),{
 
@@ -193,28 +246,6 @@ datasets:[
 }
 
 })
-
-drawMap(gR,wR,dR)
-
-}
-
-function drawMap(g,w,d){
-
-const map=L.map('map').setView([48.2,11.6],7)
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
-
-function color(r){
-
-if(r=="SAFE") return "green"
-if(r=="SOON") return "orange"
-return "red"
-
-}
-
-L.circleMarker([48.067,11.377],{color:color(g),radius:8}).addTo(map).bindPopup("Gauting")
-L.circleMarker([47.933,12.733],{color:color(w),radius:8}).addTo(map).bindPopup("Waging")
-L.circleMarker([48.605,9.106],{color:color(d),radius:8}).addTo(map).bindPopup("Dettenhausen")
 
 }
 
