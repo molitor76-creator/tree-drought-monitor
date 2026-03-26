@@ -7,18 +7,21 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
 <style>
 
 body{
 font-family:Arial;
-background:#f2f6fb;
 margin:40px;
+background:#f3f6fb;
 }
 
 .cards{
 display:flex;
 gap:20px;
-margin-bottom:40px;
+margin-bottom:30px;
 }
 
 .card{
@@ -30,19 +33,29 @@ box-shadow:0 4px 10px rgba(0,0,0,0.1);
 }
 
 .status{
-font-size:24px;
+font-size:20px;
 font-weight:bold;
 }
 
 .ok{color:green}
 .warn{color:red}
 
+.reco{
+margin-top:10px;
+}
+
 canvas{
 background:white;
 padding:20px;
 border-radius:10px;
 box-shadow:0 4px 10px rgba(0,0,0,0.1);
-max-width:900px;
+margin-top:20px;
+}
+
+#map{
+height:400px;
+margin-top:30px;
+border-radius:10px;
 }
 
 </style>
@@ -57,26 +70,42 @@ max-width:900px;
 
 <div class="card">
 <h3>Gauting</h3>
-<div id="gStatus" class="status">Loading...</div>
+<div id="gStatus" class="status"></div>
+<div id="gReco" class="reco"></div>
+<canvas id="rainG"></canvas>
 </div>
 
 <div class="card">
 <h3>Waging am See</h3>
-<div id="wStatus" class="status">Loading...</div>
+<div id="wStatus" class="status"></div>
+<div id="wReco" class="reco"></div>
+<canvas id="rainW"></canvas>
 </div>
 
 <div class="card">
 <h3>Dettenhausen</h3>
-<div id="dStatus" class="status">Loading...</div>
+<div id="dStatus" class="status"></div>
+<div id="dReco" class="reco"></div>
+<canvas id="rainD"></canvas>
 </div>
 
 </div>
 
-<h2>Soil Water Storage</h2>
+<h2>Monitoring Map</h2>
+
+<div id="map"></div>
+
+<h2>Soil Water Storage Trend</h2>
 
 <canvas id="chart"></canvas>
 
 <script>
+
+const locations={
+"Gauting":{lat:48.067,lon:11.377,cap:100},
+"Waging am See":{lat:47.933,lon:12.733,cap:70},
+"Dettenhausen":{lat:48.605,lon:9.106,cap:180}
+}
 
 async function load(){
 
@@ -88,6 +117,7 @@ const rows=t.trim().split("\n").slice(1)
 let dates=[]
 
 let g=[],w=[],d=[]
+let gI=[],wI=[],dI=[]
 
 rows.forEach(row=>{
 
@@ -96,6 +126,7 @@ const c=row.split(",")
 const date=c[0]
 const loc=c[1]
 const s=parseFloat(c[2])
+const irr=parseFloat(c[6])
 
 if(!dates.includes(date)){
 
@@ -105,41 +136,50 @@ g.push(null)
 w.push(null)
 d.push(null)
 
+gI.push(null)
+wI.push(null)
+dI.push(null)
+
 }
 
 let i=dates.indexOf(date)
 
-if(loc=="Gauting") g[i]=s
-if(loc=="Waging am See") w[i]=s
-if(loc=="Dettenhausen") d[i]=s
+if(loc=="Gauting"){g[i]=s;gI[i]=irr}
+if(loc=="Waging am See"){w[i]=s;wI[i]=irr}
+if(loc=="Dettenhausen"){d[i]=s;dI[i]=irr}
 
 })
 
 let last=dates.length-1
 
-function set(id,val,cap){
+function card(storage,cap,idStatus,idReco,irr){
 
-let pct=val/cap
+let pct=storage/cap
 
-let el=document.getElementById(id)
+let s=document.getElementById(idStatus)
+let r=document.getElementById(idReco)
 
 if(pct<0.25){
 
-el.innerText="⚠ WATER TREES"
-el.className="status warn"
+s.innerText="⚠ WATER TREES"
+s.className="status warn"
+
+r.innerText="Recommended: "+irr+" mm"
 
 }else{
 
-el.innerText="OK"
-el.className="status ok"
+s.innerText="OK"
+s.className="status ok"
+
+r.innerText=""
 
 }
 
 }
 
-set("gStatus",g[last],100)
-set("wStatus",w[last],70)
-set("dStatus",d[last],180)
+card(g[last],100,"gStatus","gReco",gI[last])
+card(w[last],70,"wStatus","wReco",wI[last])
+card(d[last],180,"dStatus","dReco",dI[last])
 
 new Chart(document.getElementById("chart"),{
 
@@ -156,9 +196,71 @@ datasets:[
 
 })
 
+drawMap(g[last],w[last],d[last])
+
+}
+
+function drawMap(g,w,d){
+
+const map=L.map('map').setView([48.2,11.6],7)
+
+L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+).addTo(map)
+
+function color(storage,cap){
+
+let r=storage/cap
+
+if(r>0.4) return "green"
+if(r>0.25) return "orange"
+return "red"
+
+}
+
+L.circleMarker([48.067,11.377],{color:color(g,100),radius:8}).addTo(map).bindPopup("Gauting")
+L.circleMarker([47.933,12.733],{color:color(w,70),radius:8}).addTo(map).bindPopup("Waging")
+L.circleMarker([48.605,9.106],{color:color(d,180),radius:8}).addTo(map).bindPopup("Dettenhausen")
+
+}
+
+async function rainCharts(){
+
+for(const name in locations){
+
+const lat=locations[name].lat
+const lon=locations[name].lon
+
+const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`
+
+const data=await fetch(url).then(r=>r.json())
+
+const rain=data.daily.precipitation_sum.slice(0,7)
+
+const canvas=
+name=="Gauting"?"rainG":
+name=="Waging am See"?"rainW":
+"rainD"
+
+new Chart(document.getElementById(canvas),{
+
+type:"bar",
+
+data:{
+labels:["1","2","3","4","5","6","7"],
+datasets:[
+{label:"Rain (mm)",data:rain}
+]
+}
+
+})
+
+}
+
 }
 
 load()
+rainCharts()
 
 </script>
 
