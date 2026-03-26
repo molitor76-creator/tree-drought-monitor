@@ -6,11 +6,10 @@ from datetime import date
 today=str(date.today())
 
 locations = {
-    "Gauting": {"lat":48.067,"lon":11.377},
-    "Waging am See": {"lat":47.933,"lon":12.733},
-    "Dettenhausen": {"lat":48.605,"lon":9.106}
+"Gauting":{"lat":48.067,"lon":11.377,"capacity":160},
+"Waging am See":{"lat":47.933,"lon":12.733,"capacity":180},
+"Dettenhausen":{"lat":48.605,"lon":9.106,"capacity":140}
 }
-
 
 def weather_data(lat,lon):
 
@@ -18,56 +17,62 @@ def weather_data(lat,lon):
 
     data=requests.get(url).json()
 
-    rain_history=sum(data["daily"]["precipitation_sum"][:30])
-    evap_history=sum(data["daily"]["et0_fao_evapotranspiration"][:30])
+    rain=sum(data["daily"]["precipitation_sum"][:30])
+    evap=sum(data["daily"]["et0_fao_evapotranspiration"][:30])
 
-    rain_forecast=sum(data["daily"]["precipitation_sum"][30:37])
-    evap_forecast=sum(data["daily"]["et0_fao_evapotranspiration"][30:37])
+    forecast_rain=sum(data["daily"]["precipitation_sum"][30:37])
+    forecast_evap=sum(data["daily"]["et0_fao_evapotranspiration"][30:37])
 
-    return rain_history,evap_history,rain_forecast,evap_forecast
+    return rain,evap,forecast_rain,forecast_evap
 
 
-def tree_stress(rh,eh,rf,ef):
+def classify(storage,capacity):
 
-    storage=rh-eh
-    forecast=rf-ef
-    score=storage+forecast
+    ratio=storage/capacity
 
-    if score>40:
-        level="LOW"
-    elif score>10:
-        level="MODERATE"
-    elif score>-10:
-        level="HIGH"
+    if ratio>0.7:
+        return "LOW"
+    elif ratio>0.4:
+        return "MODERATE"
+    elif ratio>0.2:
+        return "HIGH"
     else:
-        level="SEVERE"
-
-    return storage,forecast,level
+        return "SEVERE"
 
 
 rows=[]
 alerts=[]
 
-for name,coords in locations.items():
+for name,info in locations.items():
 
-    rh,eh,rf,ef=weather_data(coords["lat"],coords["lon"])
-    storage,forecast,level=tree_stress(rh,eh,rf,ef)
+    lat=info["lat"]
+    lon=info["lon"]
+    capacity=info["capacity"]
 
-    if level=="SEVERE":
+    rain,evap,forecast_rain,forecast_evap=weather_data(lat,lon)
+
+    storage=rain-evap
+
+    storage=max(0,min(storage,capacity))
+
+    stress=classify(storage,capacity)
+
+    if stress=="SEVERE":
         alerts.append(name)
 
     rows.append({
-        "date":today,
-        "location":name,
-        "storage":storage,
-        "forecast":forecast,
-        "stress":level
+    "date":today,
+    "location":name,
+    "storage":round(storage,2),
+    "forecast":round(forecast_rain-forecast_evap,2),
+    "stress":stress
     })
 
 
 df=pd.DataFrame(rows)
 
 os.makedirs("data",exist_ok=True)
+
 history_file="data/history.csv"
 
 if os.path.exists(history_file):
@@ -80,15 +85,16 @@ df=df.drop_duplicates(subset=["date","location"])
 df.to_csv(history_file,index=False)
 
 
-report=f"Weekly Tree Drought Monitor\nDate: {today}\n\n"
+report="Weekly Tree Drought Monitor\n"
+report+="Date: "+today+"\n\n"
 
 for r in rows:
 
     report+=f"""
 {r['location']}
 
-Storage estimate: {r['storage']:.1f}
-Forecast balance: {r['forecast']:.1f}
+Estimated soil water: {r['storage']} mm
+Forecast balance: {r['forecast']} mm
 
 Stress level: {r['stress']}
 """
@@ -98,11 +104,9 @@ os.makedirs("reports",exist_ok=True)
 with open(f"reports/{today}-report.md","w") as f:
     f.write(report)
 
-
 if alerts:
 
     with open("alert.txt","w") as f:
         f.write(",".join(alerts))
-
 
 print(report)
