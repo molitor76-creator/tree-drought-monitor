@@ -26,20 +26,6 @@ def weather(lat,lon):
     return rain_today,evap_today,rain_future,evap_future
 
 
-def stress(storage,capacity):
-
-    r=storage/capacity
-
-    if r>0.7:
-        return "LOW"
-    elif r>0.4:
-        return "MODERATE"
-    elif r>0.25:
-        return "HIGH"
-    else:
-        return "SEVERE"
-
-
 os.makedirs("data",exist_ok=True)
 
 history="data/history.csv"
@@ -68,23 +54,31 @@ for name,info in locations.items():
 
     storage=storage+rain-evap
 
-    storage=max(0,min(storage,capacity))
+    if storage < 0:
+        storage = 0
+
+    if storage > capacity:
+        storage = capacity
 
     future_storage=storage+rain_f-evap_f
-    future_storage=max(0,min(future_storage,capacity))
 
-    level=stress(storage,capacity)
+    if future_storage < 0:
+        future_storage = 0
+
+    if future_storage > capacity:
+        future_storage = capacity
 
     target=capacity*0.6
+
     irrigation=max(0,round(target-storage,1))
 
     risk="SAFE"
 
-    if storage<capacity*0.25:
+    if storage < capacity*0.25:
         risk="NOW"
         alerts.append(name)
 
-    elif future_storage<capacity*0.25:
+    elif future_storage < capacity*0.25:
         risk="SOON"
 
     rows.append({
@@ -92,7 +86,6 @@ for name,info in locations.items():
     "location":name,
     "storage":round(storage,2),
     "future":round(future_storage,2),
-    "stress":level,
     "irrigation":irrigation,
     "risk":risk
     })
@@ -120,8 +113,7 @@ for r in rows:
 Soil water: {r['storage']} mm
 Forecast soil water: {r['future']} mm
 
-Stress level: {r['stress']}
-Irrigation recommendation: {r['irrigation']} mm
+Recommended irrigation: {r['irrigation']} mm
 Risk: {r['risk']}
 """
 
