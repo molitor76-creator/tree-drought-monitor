@@ -5,39 +5,51 @@ from datetime import date
 
 today=str(date.today())
 
-locations = {
-"Gauting":{"lat":48.067,"lon":11.377,"capacity":160},
-"Waging am See":{"lat":47.933,"lon":12.733,"capacity":180},
-"Dettenhausen":{"lat":48.605,"lon":9.106,"capacity":140}
+locations={
+"Gauting":{"lat":48.067,"lon":11.377,"capacity":100},
+"Waging am See":{"lat":47.933,"lon":12.733,"capacity":70},
+"Dettenhausen":{"lat":48.605,"lon":9.106,"capacity":180}
 }
 
-def weather_data(lat,lon):
+def weather(lat,lon):
 
-    url=f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=30&timezone=Europe%2FBerlin"
+    url=f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=1&timezone=Europe%2FBerlin"
 
     data=requests.get(url).json()
 
-    rain=sum(data["daily"]["precipitation_sum"][:30])
-    evap=sum(data["daily"]["et0_fao_evapotranspiration"][:30])
+    rain=data["daily"]["precipitation_sum"][0]
+    evap=data["daily"]["et0_fao_evapotranspiration"][0]
 
-    forecast_rain=sum(data["daily"]["precipitation_sum"][30:37])
-    forecast_evap=sum(data["daily"]["et0_fao_evapotranspiration"][30:37])
-
-    return rain,evap,forecast_rain,forecast_evap
+    return rain,evap
 
 
-def classify(storage,capacity):
+def stress(storage,capacity):
 
-    ratio=storage/capacity
+    r=storage/capacity
 
-    if ratio>0.7:
+    if r>0.7:
         return "LOW"
-    elif ratio>0.4:
+    elif r>0.4:
         return "MODERATE"
-    elif ratio>0.2:
+    elif r>0.25:
         return "HIGH"
     else:
         return "SEVERE"
+
+
+os.makedirs("data",exist_ok=True)
+
+history="data/history.csv"
+
+previous={}
+
+if os.path.exists(history):
+
+    df=pd.read_csv(history)
+
+    for loc in df["location"].unique():
+
+        previous[loc]=df[df.location==loc].iloc[-1]["storage"]
 
 
 rows=[]
@@ -45,56 +57,53 @@ alerts=[]
 
 for name,info in locations.items():
 
-    lat=info["lat"]
-    lon=info["lon"]
+    rain,evap=weather(info["lat"],info["lon"])
+
     capacity=info["capacity"]
 
-    rain,evap,forecast_rain,forecast_evap=weather_data(lat,lon)
+    storage=previous.get(name,capacity*0.8)
 
-    storage=rain-evap
+    storage=storage+rain-evap
 
     storage=max(0,min(storage,capacity))
 
-    stress=classify(storage,capacity)
+    level=stress(storage,capacity)
 
-    if stress=="SEVERE":
+    if storage<capacity*0.25:
+
         alerts.append(name)
 
     rows.append({
     "date":today,
     "location":name,
     "storage":round(storage,2),
-    "forecast":round(forecast_rain-forecast_evap,2),
-    "stress":stress
+    "rain":round(rain,2),
+    "evap":round(evap,2),
+    "stress":level
     })
 
 
-df=pd.DataFrame(rows)
+df_new=pd.DataFrame(rows)
 
-os.makedirs("data",exist_ok=True)
+if os.path.exists(history):
 
-history_file="data/history.csv"
+    old=pd.read_csv(history)
+    df_new=pd.concat([old,df_new])
 
-if os.path.exists(history_file):
+df_new=df_new.drop_duplicates(subset=["date","location"])
 
-    old=pd.read_csv(history_file)
-    df=pd.concat([old,df])
+df_new.to_csv(history,index=False)
 
-df=df.drop_duplicates(subset=["date","location"])
-
-df.to_csv(history_file,index=False)
-
-
-report="Weekly Tree Drought Monitor\n"
-report+="Date: "+today+"\n\n"
+report="Tree Irrigation Monitor\n\n"
 
 for r in rows:
 
     report+=f"""
 {r['location']}
 
-Estimated soil water: {r['storage']} mm
-Forecast balance: {r['forecast']} mm
+Soil water: {r['storage']} mm
+Rain: {r['rain']} mm
+Evapotranspiration: {r['evap']} mm
 
 Stress level: {r['stress']}
 """
@@ -102,11 +111,13 @@ Stress level: {r['stress']}
 os.makedirs("reports",exist_ok=True)
 
 with open(f"reports/{today}-report.md","w") as f:
+
     f.write(report)
 
 if alerts:
 
     with open("alert.txt","w") as f:
+
         f.write(",".join(alerts))
 
 print(report)
