@@ -54,19 +54,10 @@ for name,info in locations.items():
 
     storage=storage+rain-evap
 
-    if storage < 0:
-        storage = 0
-
-    if storage > capacity:
-        storage = capacity
+    storage=max(0,min(storage,capacity))
 
     future_storage=storage+rain_f-evap_f
-
-    if future_storage < 0:
-        future_storage = 0
-
-    if future_storage > capacity:
-        future_storage = capacity
+    future_storage=max(0,min(future_storage,capacity))
 
     target=capacity*0.6
 
@@ -85,7 +76,7 @@ for name,info in locations.items():
     "date":today,
     "location":name,
     "storage":round(storage,2),
-    "future":round(future_storage,2),
+    "future_storage":round(future_storage,2),
     "irrigation":irrigation,
     "risk":risk
     })
@@ -111,7 +102,7 @@ for r in rows:
 {r['location']}
 
 Soil water: {r['storage']} mm
-Forecast soil water: {r['future']} mm
+Forecast soil water: {r['future_storage']} mm
 
 Recommended irrigation: {r['irrigation']} mm
 Risk: {r['risk']}
