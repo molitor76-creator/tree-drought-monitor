@@ -41,18 +41,18 @@ font-weight:bold;
 .soon{color:orange}
 .now{color:red}
 
+#map{
+height:400px;
+margin-top:30px;
+border-radius:10px;
+}
+
 canvas{
 background:white;
 padding:20px;
 border-radius:10px;
 box-shadow:0 4px 10px rgba(0,0,0,0.1);
 margin-top:20px;
-}
-
-#map{
-height:400px;
-margin-top:30px;
-border-radius:10px;
 }
 
 </style>
@@ -69,21 +69,18 @@ border-radius:10px;
 <h3>Gauting</h3>
 <div id="gStatus" class="status"></div>
 <div id="gReco"></div>
-<canvas id="rainG"></canvas>
 </div>
 
 <div class="card">
 <h3>Waging am See</h3>
 <div id="wStatus" class="status"></div>
 <div id="wReco"></div>
-<canvas id="rainW"></canvas>
 </div>
 
 <div class="card">
 <h3>Dettenhausen</h3>
 <div id="dStatus" class="status"></div>
 <div id="dReco"></div>
-<canvas id="rainD"></canvas>
 </div>
 
 </div>
@@ -111,47 +108,66 @@ const t=await r.text()
 
 const rows=t.trim().split("\n").slice(1)
 
-let data={}
+let latest={}
+let dates=[]
+let g=[]
+let w=[]
+let d=[]
 
 rows.forEach(row=>{
 
 const c=row.split(",")
 
-data[c[1]]={
-storage:parseFloat(c[2]),
-future:parseFloat(c[3]),
-stress:c[4],
-irrigation:parseFloat(c[5]),
-risk:c[6]
+const date=c[0]
+const loc=c[1]
+const storage=parseFloat(c[2])
+const irr=parseFloat(c[4])
+const risk=c[5]
+
+latest[loc]={storage,irr,risk}
+
+if(!dates.includes(date)){
+
+dates.push(date)
+g.push(null)
+w.push(null)
+d.push(null)
+
 }
+
+let i=dates.indexOf(date)
+
+if(loc==="Gauting") g[i]=storage
+if(loc==="Waging am See") w[i]=storage
+if(loc==="Dettenhausen") d[i]=storage
 
 })
 
-updateCard("Gauting","gStatus","gReco",data["Gauting"])
-updateCard("Waging am See","wStatus","wReco",data["Waging am See"])
-updateCard("Dettenhausen","dStatus","dReco",data["Dettenhausen"])
+updateCard("Gauting","gStatus","gReco",latest["Gauting"])
+updateCard("Waging am See","wStatus","wReco",latest["Waging am See"])
+updateCard("Dettenhausen","dStatus","dReco",latest["Dettenhausen"])
 
-drawMap(data)
+drawMap(latest)
 
-drawTrend(rows)
+drawTrend(dates,g,w,d)
 
 }
 
-function updateCard(name,idStatus,idReco,d){
+function updateCard(name,idStatus,idReco,data){
 
 let s=document.getElementById(idStatus)
 let r=document.getElementById(idReco)
 
-if(d.risk==="NOW"){
+if(data.risk==="NOW"){
 
 s.innerText="⚠ WATER NOW"
 s.className="status now"
 
-r.innerText="Recommended: "+d.irrigation+" mm"
+r.innerText="Recommended: "+data.irr+" mm"
 
 }
 
-else if(d.risk==="SOON"){
+else if(data.risk==="SOON"){
 
 s.innerText="⚠ Water likely soon"
 s.className="status soon"
@@ -200,37 +216,7 @@ L.circleMarker(
 
 }
 
-function drawTrend(rows){
-
-let dates=[]
-let g=[]
-let w=[]
-let d=[]
-
-rows.forEach(row=>{
-
-const c=row.split(",")
-
-let date=c[0]
-let loc=c[1]
-let s=parseFloat(c[2])
-
-if(!dates.includes(date)){
-
-dates.push(date)
-g.push(null)
-w.push(null)
-d.push(null)
-
-}
-
-let i=dates.indexOf(date)
-
-if(loc==="Gauting") g[i]=s
-if(loc==="Waging am See") w[i]=s
-if(loc==="Dettenhausen") d[i]=s
-
-})
+function drawTrend(dates,g,w,d){
 
 new Chart(document.getElementById("chart"),{
 
