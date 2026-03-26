@@ -13,14 +13,17 @@ locations={
 
 def weather(lat,lon):
 
-    url=f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=1&timezone=Europe%2FBerlin"
+    url=f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=1&forecast_days=7&timezone=Europe%2FBerlin"
 
     data=requests.get(url).json()
 
-    rain=data["daily"]["precipitation_sum"][0]
-    evap=data["daily"]["et0_fao_evapotranspiration"][0]
+    rain_today=data["daily"]["precipitation_sum"][0]
+    evap_today=data["daily"]["et0_fao_evapotranspiration"][0]
 
-    return rain,evap
+    rain_future=sum(data["daily"]["precipitation_sum"][1:7])
+    evap_future=sum(data["daily"]["et0_fao_evapotranspiration"][1:7])
+
+    return rain_today,evap_today,rain_future,evap_future
 
 
 def stress(storage,capacity):
@@ -57,7 +60,7 @@ alerts=[]
 
 for name,info in locations.items():
 
-    rain,evap=weather(info["lat"],info["lon"])
+    rain,evap,rain_f,evap_f=weather(info["lat"],info["lon"])
 
     capacity=info["capacity"]
 
@@ -67,23 +70,31 @@ for name,info in locations.items():
 
     storage=max(0,min(storage,capacity))
 
+    future_storage=storage+rain_f-evap_f
+    future_storage=max(0,min(future_storage,capacity))
+
     level=stress(storage,capacity)
 
     target=capacity*0.6
     irrigation=max(0,round(target-storage,1))
 
-    if storage<capacity*0.25:
+    risk="SAFE"
 
+    if storage<capacity*0.25:
+        risk="NOW"
         alerts.append(name)
+
+    elif future_storage<capacity*0.25:
+        risk="SOON"
 
     rows.append({
     "date":today,
     "location":name,
     "storage":round(storage,2),
-    "rain":round(rain,2),
-    "evap":round(evap,2),
+    "future":round(future_storage,2),
     "stress":level,
-    "irrigation":irrigation
+    "irrigation":irrigation,
+    "risk":risk
     })
 
 
@@ -107,24 +118,20 @@ for r in rows:
 {r['location']}
 
 Soil water: {r['storage']} mm
-Rain: {r['rain']} mm
-Evapotranspiration: {r['evap']} mm
+Forecast soil water: {r['future']} mm
 
 Stress level: {r['stress']}
-
-Recommended irrigation: {r['irrigation']} mm
+Irrigation recommendation: {r['irrigation']} mm
+Risk: {r['risk']}
 """
 
 os.makedirs("reports",exist_ok=True)
 
 with open(f"reports/{today}-report.md","w") as f:
-
     f.write(report)
 
 if alerts:
-
     with open("alert.txt","w") as f:
-
         f.write(",".join(alerts))
 
 print(report)
