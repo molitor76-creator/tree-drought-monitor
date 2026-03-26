@@ -69,6 +69,9 @@ for name,info in locations.items():
 
     level=stress(storage,capacity)
 
+    target=capacity*0.6
+    irrigation=max(0,round(target-storage,1))
+
     if storage<capacity*0.25:
 
         alerts.append(name)
@@ -79,7 +82,8 @@ for name,info in locations.items():
     "storage":round(storage,2),
     "rain":round(rain,2),
     "evap":round(evap,2),
-    "stress":level
+    "stress":level,
+    "irrigation":irrigation
     })
 
 
@@ -94,6 +98,7 @@ df_new=df_new.drop_duplicates(subset=["date","location"])
 
 df_new.to_csv(history,index=False)
 
+
 report="Tree Irrigation Monitor\n\n"
 
 for r in rows:
@@ -106,6 +111,8 @@ Rain: {r['rain']} mm
 Evapotranspiration: {r['evap']} mm
 
 Stress level: {r['stress']}
+
+Recommended irrigation: {r['irrigation']} mm
 """
 
 os.makedirs("reports",exist_ok=True)
