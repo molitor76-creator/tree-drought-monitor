@@ -48,11 +48,7 @@ border-radius:10px;
 }
 
 canvas{
-background:white;
-padding:20px;
-border-radius:10px;
-box-shadow:0 4px 10px rgba(0,0,0,0.1);
-margin-top:20px;
+margin-top:10px;
 }
 
 </style>
@@ -69,18 +65,21 @@ margin-top:20px;
 <h3>Gauting</h3>
 <div id="gStatus" class="status"></div>
 <div id="gReco"></div>
+<canvas id="rainG"></canvas>
 </div>
 
 <div class="card">
 <h3>Waging am See</h3>
 <div id="wStatus" class="status"></div>
 <div id="wReco"></div>
+<canvas id="rainW"></canvas>
 </div>
 
 <div class="card">
 <h3>Dettenhausen</h3>
 <div id="dStatus" class="status"></div>
 <div id="dReco"></div>
+<canvas id="rainD"></canvas>
 </div>
 
 </div>
@@ -91,7 +90,7 @@ margin-top:20px;
 
 <h2>Soil Water Trend</h2>
 
-<canvas id="chart"></canvas>
+<canvas id="trend"></canvas>
 
 <script>
 
@@ -101,38 +100,34 @@ const locations={
 "Dettenhausen":{lat:48.605,lon:9.106}
 }
 
-async function load(){
+async function loadData(){
 
-const r=await fetch("data/history.csv")
-const t=await r.text()
+const response=await fetch("data/history.csv")
+const text=await response.text()
 
-const rows=t.trim().split("\n").slice(1)
+const rows=text.trim().split("\n").slice(1)
 
 let latest={}
 let dates=[]
-let g=[]
-let w=[]
-let d=[]
+let g=[],w=[],d=[]
 
 rows.forEach(row=>{
 
 const c=row.split(",")
 
-const date=c[0]
-const loc=c[1]
-const storage=parseFloat(c[2])
-const irr=parseFloat(c[4])
-const risk=c[5]
+let date=c[0]
+let loc=c[1]
+let storage=parseFloat(c[2])
+let irrigation=parseFloat(c[4])
+let risk=c[5]
 
-latest[loc]={storage,irr,risk}
+latest[loc]={storage,irrigation,risk}
 
 if(!dates.includes(date)){
-
 dates.push(date)
 g.push(null)
 w.push(null)
 d.push(null)
-
 }
 
 let i=dates.indexOf(date)
@@ -151,31 +146,31 @@ drawMap(latest)
 
 drawTrend(dates,g,w,d)
 
+drawRainCharts()
+
 }
 
-function updateCard(name,idStatus,idReco,data){
+function updateCard(name,statusId,recoId,data){
 
-let s=document.getElementById(idStatus)
-let r=document.getElementById(idReco)
+let s=document.getElementById(statusId)
+let r=document.getElementById(recoId)
 
 if(data.risk==="NOW"){
 
 s.innerText="⚠ WATER NOW"
 s.className="status now"
 
-r.innerText="Recommended: "+data.irr+" mm"
+r.innerText="Recommended: "+data.irrigation+" mm"
 
 }
-
 else if(data.risk==="SOON"){
 
-s.innerText="⚠ Water likely soon"
+s.innerText="⚠ Water soon"
 s.className="status soon"
 
 r.innerText=""
 
 }
-
 else{
 
 s.innerText="OK"
@@ -191,9 +186,7 @@ function drawMap(data){
 
 const map=L.map('map').setView([48.2,11.6],7)
 
-L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-).addTo(map)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
 
 function color(r){
 
@@ -218,7 +211,7 @@ L.circleMarker(
 
 function drawTrend(dates,g,w,d){
 
-new Chart(document.getElementById("chart"),{
+new Chart(document.getElementById("trend"),{
 
 type:"line",
 
@@ -235,10 +228,46 @@ datasets:[
 
 }
 
-load()
+async function drawRainCharts(){
+
+for(const name in locations){
+
+const lat=locations[name].lat
+const lon=locations[name].lon
+
+const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`
+
+const data=await fetch(url).then(r=>r.json())
+
+const rain=data.daily.precipitation_sum.slice(0,7)
+
+const canvas=
+name==="Gauting"?"rainG":
+name==="Waging am See"?"rainW":
+"rainD"
+
+new Chart(document.getElementById(canvas),{
+
+type:"bar",
+
+data:{
+labels:["1","2","3","4","5","6","7"],
+datasets:[{
+label:"Rain (mm)",
+data:rain
+}]
+
+}
+
+})
+
+}
+
+}
+
+loadData()
 
 </script>
 
 </body>
-
 </html>
