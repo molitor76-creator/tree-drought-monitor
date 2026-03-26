@@ -3,25 +3,22 @@
 
 <head>
 
-<title>Tree Drought Monitor</title>
+<title>Tree Irrigation Monitor</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <style>
 
 body{
 font-family:Arial;
+background:#f2f6fb;
 margin:40px;
-background:#f3f6fb;
 }
 
 .cards{
 display:flex;
 gap:20px;
-margin-bottom:30px;
+margin-bottom:40px;
 }
 
 .card{
@@ -35,28 +32,17 @@ box-shadow:0 4px 10px rgba(0,0,0,0.1);
 .status{
 font-size:24px;
 font-weight:bold;
-margin-top:10px;
 }
 
-.low{color:green;}
-.moderate{color:orange;}
-.high{color:red;}
-.severe{color:darkred;}
+.ok{color:green}
+.warn{color:red}
 
 canvas{
 background:white;
 padding:20px;
 border-radius:10px;
 box-shadow:0 4px 10px rgba(0,0,0,0.1);
-margin-top:30px;
 max-width:900px;
-}
-
-#map{
-height:400px;
-margin-top:30px;
-border-radius:10px;
-box-shadow:0 4px 10px rgba(0,0,0,0.1);
 }
 
 </style>
@@ -65,78 +51,51 @@ box-shadow:0 4px 10px rgba(0,0,0,0.1);
 
 <body>
 
-<h1>Tree Drought Monitor</h1>
+<h1>Tree Irrigation Monitor</h1>
 
 <div class="cards">
 
 <div class="card">
 <h3>Gauting</h3>
-<div id="gautingStatus" class="status">Loading...</div>
-<canvas id="rainG"></canvas>
+<div id="gStatus" class="status">Loading...</div>
 </div>
 
 <div class="card">
 <h3>Waging am See</h3>
-<div id="wagingStatus" class="status">Loading...</div>
-<canvas id="rainW"></canvas>
+<div id="wStatus" class="status">Loading...</div>
 </div>
 
 <div class="card">
 <h3>Dettenhausen</h3>
-<div id="dettenhausenStatus" class="status">Loading...</div>
-<canvas id="rainD"></canvas>
+<div id="dStatus" class="status">Loading...</div>
 </div>
 
 </div>
 
-<h2>Monitoring Map</h2>
+<h2>Soil Water Storage</h2>
 
-<div id="map"></div>
-
-<h2>Water Storage Trend</h2>
-
-<canvas id="storageChart"></canvas>
-
-<h2>Drought Stress Trend</h2>
-
-<canvas id="stressChart"></canvas>
+<canvas id="chart"></canvas>
 
 <script>
 
-const locations={
-"Gauting":{lat:48.067,lon:11.377},
-"Waging am See":{lat:47.933,lon:12.733},
-"Dettenhausen":{lat:48.605,lon:9.106}
-}
+async function load(){
 
-const stressMap={
-LOW:0,
-MODERATE:1,
-HIGH:2,
-SEVERE:3
-}
+const r=await fetch("data/history.csv")
+const t=await r.text()
 
-const stressLabel=["LOW","MODERATE","HIGH","SEVERE"]
-
-async function loadHistory(){
-
-const response=await fetch("data/history.csv")
-const text=await response.text()
-
-const rows=text.trim().split("\n").slice(1)
+const rows=t.trim().split("\n").slice(1)
 
 let dates=[]
+
 let g=[],w=[],d=[]
-let gStress=[],wStress=[],dStress=[]
 
 rows.forEach(row=>{
 
 const c=row.split(",")
 
 const date=c[0]
-const location=c[1]
-const storage=parseFloat(c[2])
-const stress=c[4]
+const loc=c[1]
+const s=parseFloat(c[2])
 
 if(!dates.includes(date)){
 
@@ -146,169 +105,52 @@ g.push(null)
 w.push(null)
 d.push(null)
 
-gStress.push(null)
-wStress.push(null)
-dStress.push(null)
-
 }
 
 let i=dates.indexOf(date)
 
-if(location==="Gauting"){
-g[i]=storage
-gStress[i]=stressMap[stress]
-}
-
-if(location==="Waging am See"){
-w[i]=storage
-wStress[i]=stressMap[stress]
-}
-
-if(location==="Dettenhausen"){
-d[i]=storage
-dStress[i]=stressMap[stress]
-}
+if(loc=="Gauting") g[i]=s
+if(loc=="Waging am See") w[i]=s
+if(loc=="Dettenhausen") d[i]=s
 
 })
 
-let lastIndex=dates.length-1
+let last=dates.length-1
 
-setStatus("gautingStatus",stressLabel[gStress[lastIndex]])
-setStatus("wagingStatus",stressLabel[wStress[lastIndex]])
-setStatus("dettenhausenStatus",stressLabel[dStress[lastIndex]])
+function set(id,val,cap){
 
-drawCharts(dates,g,w,d,gStress,wStress,dStress)
-
-drawMap(
-stressLabel[gStress[lastIndex]],
-stressLabel[wStress[lastIndex]],
-stressLabel[dStress[lastIndex]]
-)
-
-}
-
-function setStatus(id,value){
+let pct=val/cap
 
 let el=document.getElementById(id)
 
-el.innerText=value
+if(pct<0.25){
 
-el.classList.remove("low","moderate","high","severe")
+el.innerText="⚠ WATER TREES"
+el.className="status warn"
 
-el.classList.add(value.toLowerCase())
+}else{
+
+el.innerText="OK"
+el.className="status ok"
 
 }
 
-function drawCharts(dates,g,w,d,gStress,wStress,dStress){
+}
 
-new Chart(document.getElementById("storageChart"),{
+set("gStatus",g[last],100)
+set("wStatus",w[last],70)
+set("dStatus",d[last],180)
+
+new Chart(document.getElementById("chart"),{
 
 type:"line",
 
 data:{
 labels:dates,
 datasets:[
-{label:"Gauting",data:g,borderColor:"red",pointRadius:6},
-{label:"Waging am See",data:w,borderColor:"blue",pointRadius:6},
-{label:"Dettenhausen",data:d,borderColor:"green",pointRadius:6}
-]
-}
-
-})
-
-new Chart(document.getElementById("stressChart"),{
-
-type:"line",
-
-data:{
-labels:dates,
-datasets:[
-{label:"Gauting",data:gStress,borderColor:"red",pointRadius:6},
-{label:"Waging am See",data:wStress,borderColor:"blue",pointRadius:6},
-{label:"Dettenhausen",data:dStress,borderColor:"green",pointRadius:6}
-]
-},
-
-options:{
-scales:{
-y:{
-ticks:{
-callback:function(v){
-return stressLabel[v]
-}
-}
-}
-}
-
-}
-
-})
-
-}
-
-function drawMap(gStress,wStress,dStress){
-
-const map=L.map('map').setView([48.3,11.6],7)
-
-L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-).addTo(map)
-
-function color(level){
-
-if(level==="LOW") return "green"
-if(level==="MODERATE") return "orange"
-if(level==="HIGH") return "red"
-return "darkred"
-
-}
-
-L.circleMarker(
-[locations["Gauting"].lat,locations["Gauting"].lon],
-{color:color(gStress),radius:8}
-).addTo(map).bindPopup("Gauting: "+gStress)
-
-L.circleMarker(
-[locations["Waging am See"].lat,locations["Waging am See"].lon],
-{color:color(wStress),radius:8}
-).addTo(map).bindPopup("Waging am See: "+wStress)
-
-L.circleMarker(
-[locations["Dettenhausen"].lat,locations["Dettenhausen"].lon],
-{color:color(dStress),radius:8}
-).addTo(map).bindPopup("Dettenhausen: "+dStress)
-
-}
-
-async function loadRainCharts(){
-
-for(const name in locations){
-
-const lat=locations[name].lat
-const lon=locations[name].lon
-
-const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`
-
-const data=await fetch(url).then(r=>r.json())
-
-const rain=data.daily.precipitation_sum.slice(0,7)
-
-const canvas=
-name==="Gauting"?"rainG":
-name==="Waging am See"?"rainW":
-"rainD"
-
-new Chart(document.getElementById(canvas),{
-
-type:"bar",
-
-data:{
-labels:["1","2","3","4","5","6","7"],
-datasets:[
-{
-label:"Rain (mm)",
-data:rain
-}
+{label:"Gauting",data:g,borderColor:"red"},
+{label:"Waging",data:w,borderColor:"blue"},
+{label:"Dettenhausen",data:d,borderColor:"green"}
 ]
 }
 
@@ -316,10 +158,7 @@ data:rain
 
 }
 
-}
-
-loadHistory()
-loadRainCharts()
+load()
 
 </script>
 
