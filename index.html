@@ -37,12 +37,9 @@ font-size:20px;
 font-weight:bold;
 }
 
-.ok{color:green}
-.warn{color:red}
-
-.reco{
-margin-top:10px;
-}
+.safe{color:green}
+.soon{color:orange}
+.now{color:red}
 
 canvas{
 background:white;
@@ -71,31 +68,31 @@ border-radius:10px;
 <div class="card">
 <h3>Gauting</h3>
 <div id="gStatus" class="status"></div>
-<div id="gReco" class="reco"></div>
+<div id="gReco"></div>
 <canvas id="rainG"></canvas>
 </div>
 
 <div class="card">
 <h3>Waging am See</h3>
 <div id="wStatus" class="status"></div>
-<div id="wReco" class="reco"></div>
+<div id="wReco"></div>
 <canvas id="rainW"></canvas>
 </div>
 
 <div class="card">
 <h3>Dettenhausen</h3>
 <div id="dStatus" class="status"></div>
-<div id="dReco" class="reco"></div>
+<div id="dReco"></div>
 <canvas id="rainD"></canvas>
 </div>
 
 </div>
 
-<h2>Monitoring Map</h2>
+<h2>Irrigation Risk Map</h2>
 
 <div id="map"></div>
 
-<h2>Soil Water Storage Trend</h2>
+<h2>Soil Water Trend</h2>
 
 <canvas id="chart"></canvas>
 
@@ -115,9 +112,9 @@ const t=await r.text()
 const rows=t.trim().split("\n").slice(1)
 
 let dates=[]
-
 let g=[],w=[],d=[]
 let gI=[],wI=[],dI=[]
+let gR,wR,dR
 
 rows.forEach(row=>{
 
@@ -126,7 +123,8 @@ const c=row.split(",")
 const date=c[0]
 const loc=c[1]
 const s=parseFloat(c[2])
-const irr=parseFloat(c[6])
+const irr=parseFloat(c[5])
+const risk=c[6]
 
 if(!dates.includes(date)){
 
@@ -144,42 +142,42 @@ dI.push(null)
 
 let i=dates.indexOf(date)
 
-if(loc=="Gauting"){g[i]=s;gI[i]=irr}
-if(loc=="Waging am See"){w[i]=s;wI[i]=irr}
-if(loc=="Dettenhausen"){d[i]=s;dI[i]=irr}
+if(loc=="Gauting"){g[i]=s;gI[i]=irr;gR=risk}
+if(loc=="Waging am See"){w[i]=s;wI[i]=irr;wR=risk}
+if(loc=="Dettenhausen"){d[i]=s;dI[i]=irr;dR=risk}
 
 })
 
 let last=dates.length-1
 
-function card(storage,cap,idStatus,idReco,irr){
-
-let pct=storage/cap
+function card(risk,irr,idStatus,idReco){
 
 let s=document.getElementById(idStatus)
 let r=document.getElementById(idReco)
 
-if(pct<0.25){
-
-s.innerText="⚠ WATER TREES"
-s.className="status warn"
-
+if(risk=="NOW"){
+s.innerText="⚠ WATER NOW"
+s.className="status now"
 r.innerText="Recommended: "+irr+" mm"
+}
 
-}else{
-
-s.innerText="OK"
-s.className="status ok"
-
+else if(risk=="SOON"){
+s.innerText="⚠ Water likely needed soon"
+s.className="status soon"
 r.innerText=""
+}
 
+else{
+s.innerText="OK"
+s.className="status safe"
+r.innerText=""
 }
 
 }
 
-card(g[last],100,"gStatus","gReco",gI[last])
-card(w[last],70,"wStatus","wReco",wI[last])
-card(d[last],180,"dStatus","dReco",dI[last])
+card(gR,gI[last],"gStatus","gReco")
+card(wR,wI[last],"wStatus","wReco")
+card(dR,dI[last],"dStatus","dReco")
 
 new Chart(document.getElementById("chart"),{
 
@@ -196,7 +194,7 @@ datasets:[
 
 })
 
-drawMap(g[last],w[last],d[last])
+drawMap(gR,wR,dR)
 
 }
 
@@ -204,63 +202,23 @@ function drawMap(g,w,d){
 
 const map=L.map('map').setView([48.2,11.6],7)
 
-L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-).addTo(map)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
 
-function color(storage,cap){
+function color(r){
 
-let r=storage/cap
-
-if(r>0.4) return "green"
-if(r>0.25) return "orange"
+if(r=="SAFE") return "green"
+if(r=="SOON") return "orange"
 return "red"
 
 }
 
-L.circleMarker([48.067,11.377],{color:color(g,100),radius:8}).addTo(map).bindPopup("Gauting")
-L.circleMarker([47.933,12.733],{color:color(w,70),radius:8}).addTo(map).bindPopup("Waging")
-L.circleMarker([48.605,9.106],{color:color(d,180),radius:8}).addTo(map).bindPopup("Dettenhausen")
-
-}
-
-async function rainCharts(){
-
-for(const name in locations){
-
-const lat=locations[name].lat
-const lon=locations[name].lon
-
-const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`
-
-const data=await fetch(url).then(r=>r.json())
-
-const rain=data.daily.precipitation_sum.slice(0,7)
-
-const canvas=
-name=="Gauting"?"rainG":
-name=="Waging am See"?"rainW":
-"rainD"
-
-new Chart(document.getElementById(canvas),{
-
-type:"bar",
-
-data:{
-labels:["1","2","3","4","5","6","7"],
-datasets:[
-{label:"Rain (mm)",data:rain}
-]
-}
-
-})
-
-}
+L.circleMarker([48.067,11.377],{color:color(g),radius:8}).addTo(map).bindPopup("Gauting")
+L.circleMarker([47.933,12.733],{color:color(w),radius:8}).addTo(map).bindPopup("Waging")
+L.circleMarker([48.605,9.106],{color:color(d),radius:8}).addTo(map).bindPopup("Dettenhausen")
 
 }
 
 load()
-rainCharts()
 
 </script>
 
