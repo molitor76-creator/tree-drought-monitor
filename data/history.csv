@@ -20,3 +20,6 @@ date,location,storage,forecast,stress,rain,evap,future,irrigation,risk,future_st
 2026-03-26,Gauting,10.699999999999996,17.91,MODERATE,,,,,,
 2026-03-26,Waging am See,-8.119999999999983,45.03,MODERATE,,,,,,
 2026-03-26,Dettenhausen,-20.28,10.81,HIGH,,,,,,
+2026-03-27,Gauting,13.01,,,,,,47.0,NOW,28.78
+2026-03-27,Waging am See,0.0,,,,,,42.0,NOW,13.83
+2026-03-27,Dettenhausen,0.0,,,,,,108.0,NOW,4.56
