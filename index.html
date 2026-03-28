@@ -38,17 +38,24 @@
 
         async function loadData() {
             try {
-                const response = await fetch("data/history.csv");
+                // The "?t=" part forces the browser to bypass the cache and get the latest data
+                const response = await fetch("data/history.csv?t=" + new Date().getTime());
                 const text = await response.text();
                 const rows = text.trim().split("\n").slice(1);
+                
                 let latest = {};
                 let dates = [], g = [], w = [], d = [];
 
                 rows.forEach(row => {
                     const c = row.split(",");
+                    if (c.length < 6) return; // Skip incomplete rows
+
                     let date = c[0], loc = c[1], storage = parseFloat(c[2]), risk = c[5]?.trim().toUpperCase();
                     latest[loc] = {storage, irrigation: c[4], risk};
-                    if(!dates.includes(date)) { dates.push(date); g.push(null); w.push(null); d.push(null); }
+
+                    if(!dates.includes(date)) { 
+                        dates.push(date); g.push(null); w.push(null); d.push(null); 
+                    }
                     let i = dates.indexOf(date);
                     if(loc === "Gauting") g[i] = storage;
                     if(loc === "Waging am See") w[i] = storage;
@@ -61,25 +68,31 @@
                 drawMap(latest);
                 drawTrend(dates, g, w, d);
                 drawRainCharts();
-            } catch (e) { console.error("Waiting for data file..."); }
+            } catch (e) { 
+                console.error("Error loading CSV:", e);
+                document.querySelectorAll('.status').forEach(el => el.innerText = "Data Loading...");
+            }
         }
 
         function updateCard(name, statusId, recoId, data) {
             let s = document.getElementById(statusId);
             let r = document.getElementById(recoId);
-            if (!data) return s.innerText = "Pending Update";
+            if (!data || !data.risk) {
+                s.innerText = "No Data Yet";
+                return;
+            }
 
             if (data.risk === "NOW") {
                 s.innerText = "⚠ WATER NOW"; s.className = "status now";
                 r.innerText = "Irrigation: " + data.irrigation + " mm";
             } else if (data.risk === "SOON") {
                 s.innerText = "⚠ Water Soon"; s.className = "status soon";
-                r.innerText = "";
+                r.innerText = "Monitor closely";
             } else if (data.risk === "SAFE") {
                 s.innerText = "OK"; s.className = "status safe";
-                r.innerText = "";
+                r.innerText = "Soil moisture adequate";
             } else {
-                s.innerText = "Unknown Status"; s.className = "status";
+                s.innerText = "Status: " + data.risk; s.className = "status";
             }
         }
 
@@ -95,7 +108,12 @@
                 if(risk === "SOON") color = "orange";
                 if(risk === "NOW") color = "red";
 
-                L.circleMarker([loc.lat, loc.lon], {color: color, radius: 10, fillOpacity: 0.8}).addTo(map).bindPopup(name + ": " + (risk || "No Data"));
+                L.circleMarker([loc.lat, loc.lon], {
+                    color: color, 
+                    radius: 12, 
+                    fillOpacity: 0.8,
+                    weight: 2
+                }).addTo(map).bindPopup(`<b>${name}</b><br>Status: ${risk || 'Unknown'}`);
             });
         }
 
@@ -103,22 +121,39 @@
             new Chart(document.getElementById("trend"), {
                 type: "line",
                 data: { labels: dates, datasets: [
-                    {label: "Gauting", data: g, borderColor: "red", fill: false},
-                    {label: "Waging", data: w, borderColor: "blue", fill: false},
-                    {label: "Dettenhausen", data: d, borderColor: "green", fill: false}
-                ]},
-                options: { scales: { y: { beginAtZero: true } } }
+                    {label: "Gauting", data: g, borderColor: "red", tension: 0.1},
+                    {label: "Waging", data: w, borderColor: "blue", tension: 0.1},
+                    {label: "Dettenhausen", data: d, borderColor: "green", tension: 0.1}
+                ]}
             });
         }
 
         async function drawRainCharts() {
             for (const name in locations) {
                 const {lat, lon} = locations[name];
-                const data = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`).then(r => r.json());
+                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`);
+                const data = await response.json();
+                
+                // Convert dates (2026-03-24) into Weekdays (Mon, Tue...)
+                const labels = data.daily.time.slice(1, 8).map(dateStr => {
+                    const date = new Date(dateStr);
+                    return date.toLocaleDateString('en-US', { weekday: 'short' });
+                });
+
+                const rainValues = data.daily.precipitation_sum.slice(1, 8);
                 const canvasId = name === "Gauting" ? "rainG" : name === "Waging am See" ? "rainW" : "rainD";
+                
                 new Chart(document.getElementById(canvasId), {
                     type: "bar",
-                    data: { labels: ["T+1", "T+2", "T+3", "T+4", "T+5", "T+6", "T+7"], datasets: [{label: "Rain (mm)", data: data.daily.precipitation_sum.slice(1, 8), backgroundColor: "rgba(54, 162, 235, 0.5)"}]}
+                    data: { 
+                        labels: labels, 
+                        datasets: [{
+                            label: "Rain (mm)", 
+                            data: rainValues, 
+                            backgroundColor: "rgba(54, 162, 235, 0.6)"
+                        }]
+                    },
+                    options: { plugins: { legend: { display: false } } }
                 });
             }
         }
