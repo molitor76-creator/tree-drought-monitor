@@ -19,13 +19,31 @@
 </head>
 <body>
     <h1>Tree Irrigation Monitor</h1>
+    
     <div class="cards">
-        <div class="card"><h3>Gauting</h3><div id="gStatus" class="status"></div><div id="gReco"></div><canvas id="rainG"></canvas></div>
-        <div class="card"><h3>Waging am See</h3><div id="wStatus" class="status"></div><div id="wReco"></div><canvas id="rainW"></canvas></div>
-        <div class="card"><h3>Dettenhausen</h3><div id="dStatus" class="status"></div><div id="dReco"></div><canvas id="rainD"></canvas></div>
+        <div class="card">
+            <h3>Gauting</h3>
+            <div id="gStatus" class="status">Loading...</div>
+            <div id="gReco"></div>
+            <canvas id="rainG"></canvas>
+        </div>
+        <div class="card">
+            <h3>Waging am See</h3>
+            <div id="wStatus" class="status">Loading...</div>
+            <div id="wReco"></div>
+            <canvas id="rainW"></canvas>
+        </div>
+        <div class="card">
+            <h3>Dettenhausen</h3>
+            <div id="dStatus" class="status">Loading...</div>
+            <div id="dReco"></div>
+            <canvas id="rainD"></canvas>
+        </div>
     </div>
+
     <h2>Irrigation Risk Map</h2>
     <div id="map"></div>
+
     <h2>Soil Water Trend</h2>
     <canvas id="trend"></canvas>
 
@@ -38,7 +56,7 @@
 
         async function loadData() {
             try {
-                // The "?t=" part forces the browser to bypass the cache and get the latest data
+                // Fetch the CSV with a timestamp to prevent caching old data
                 const response = await fetch("data/history.csv?t=" + new Date().getTime());
                 const text = await response.text();
                 const rows = text.trim().split("\n").slice(1);
@@ -46,12 +64,14 @@
                 let latest = {};
                 let dates = [], g = [], w = [], d = [];
 
+                // 1. Process all rows for the Trend Chart (History)
                 rows.forEach(row => {
                     const c = row.split(",");
-                    if (c.length < 6) return; // Skip incomplete rows
+                    if (c.length < 6) return; 
 
-                    let date = c[0], loc = c[1], storage = parseFloat(c[2]), risk = c[5]?.trim().toUpperCase();
-                    latest[loc] = {storage, irrigation: c[4], risk};
+                    let date = c[0].trim();
+                    let loc = c[1].trim();
+                    let storage = parseFloat(c[2]);
 
                     if(!dates.includes(date)) { 
                         dates.push(date); g.push(null); w.push(null); d.push(null); 
@@ -62,37 +82,59 @@
                     if(loc === "Dettenhausen") d[i] = storage;
                 });
 
+                // 2. Find the LATEST valid status for each tile (Scanning file from bottom up)
+                for (let i = rows.length - 1; i >= 0; i--) {
+                    const c = rows[i].split(",");
+                    if (c.length < 6) continue;
+                    
+                    let loc = c[1].trim();
+                    let risk = c[5]?.trim().toUpperCase();
+                    let irrigation = c[4]?.trim();
+
+                    if (!latest[loc]) {
+                        latest[loc] = { irrigation, risk };
+                    }
+                }
+
                 updateCard("Gauting", "gStatus", "gReco", latest["Gauting"]);
                 updateCard("Waging am See", "wStatus", "wReco", latest["Waging am See"]);
                 updateCard("Dettenhausen", "dStatus", "dReco", latest["Dettenhausen"]);
+                
                 drawMap(latest);
                 drawTrend(dates, g, w, d);
                 drawRainCharts();
+
             } catch (e) { 
-                console.error("Error loading CSV:", e);
-                document.querySelectorAll('.status').forEach(el => el.innerText = "Data Loading...");
+                console.error("Error loading data:", e);
+                document.querySelectorAll('.status').forEach(el => el.innerText = "Error Loading Data");
             }
         }
 
         function updateCard(name, statusId, recoId, data) {
             let s = document.getElementById(statusId);
             let r = document.getElementById(recoId);
+            
             if (!data || !data.risk) {
-                s.innerText = "No Data Yet";
+                s.innerText = "No Data Found";
+                s.className = "status";
                 return;
             }
 
             if (data.risk === "NOW") {
-                s.innerText = "⚠ WATER NOW"; s.className = "status now";
-                r.innerText = "Irrigation: " + data.irrigation + " mm";
+                s.innerText = "⚠ WATER NOW"; 
+                s.className = "status now";
+                r.innerText = "Recommended: " + data.irrigation + " mm";
             } else if (data.risk === "SOON") {
-                s.innerText = "⚠ Water Soon"; s.className = "status soon";
-                r.innerText = "Monitor closely";
+                s.innerText = "⚠ Water Soon"; 
+                s.className = "status soon";
+                r.innerText = "Rain forecast is low.";
             } else if (data.risk === "SAFE") {
-                s.innerText = "OK"; s.className = "status safe";
-                r.innerText = "Soil moisture adequate";
+                s.innerText = "OK"; 
+                s.className = "status safe";
+                r.innerText = "Soil moisture is good.";
             } else {
-                s.innerText = "Status: " + data.risk; s.className = "status";
+                s.innerText = "Status: " + data.risk;
+                s.className = "status";
             }
         }
 
@@ -120,43 +162,58 @@
         function drawTrend(dates, g, w, d) {
             new Chart(document.getElementById("trend"), {
                 type: "line",
-                data: { labels: dates, datasets: [
-                    {label: "Gauting", data: g, borderColor: "red", tension: 0.1},
-                    {label: "Waging", data: w, borderColor: "blue", tension: 0.1},
-                    {label: "Dettenhausen", data: d, borderColor: "green", tension: 0.1}
-                ]}
+                data: { 
+                    labels: dates, 
+                    datasets: [
+                        {label: "Gauting", data: g, borderColor: "red", tension: 0.1, fill: false},
+                        {label: "Waging", data: w, borderColor: "blue", tension: 0.1, fill: false},
+                        {label: "Dettenhausen", data: d, borderColor: "green", tension: 0.1, fill: false}
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Soil Water (mm)' } } }
+                }
             });
         }
 
         async function drawRainCharts() {
             for (const name in locations) {
                 const {lat, lon} = locations[name];
-                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`);
-                const data = await response.json();
-                
-                // Convert dates (2026-03-24) into Weekdays (Mon, Tue...)
-                const labels = data.daily.time.slice(1, 8).map(dateStr => {
-                    const date = new Date(dateStr);
-                    return date.toLocaleDateString('en-US', { weekday: 'short' });
-                });
+                try {
+                    const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`);
+                    const data = await response.json();
+                    
+                    // Convert weather dates to Weekdays
+                    const labels = data.daily.time.slice(1, 8).map(dateStr => {
+                        const date = new Date(dateStr);
+                        return date.toLocaleDateString('en-US', { weekday: 'short' });
+                    });
 
-                const rainValues = data.daily.precipitation_sum.slice(1, 8);
-                const canvasId = name === "Gauting" ? "rainG" : name === "Waging am See" ? "rainW" : "rainD";
-                
-                new Chart(document.getElementById(canvasId), {
-                    type: "bar",
-                    data: { 
-                        labels: labels, 
-                        datasets: [{
-                            label: "Rain (mm)", 
-                            data: rainValues, 
-                            backgroundColor: "rgba(54, 162, 235, 0.6)"
-                        }]
-                    },
-                    options: { plugins: { legend: { display: false } } }
-                });
+                    const rainValues = data.daily.precipitation_sum.slice(1, 8);
+                    const canvasId = name === "Gauting" ? "rainG" : name === "Waging am See" ? "rainW" : "rainD";
+                    
+                    new Chart(document.getElementById(canvasId), {
+                        type: "bar",
+                        data: { 
+                            labels: labels, 
+                            datasets: [{
+                                label: "Rain (mm)", 
+                                data: rainValues, 
+                                backgroundColor: "rgba(54, 162, 235, 0.6)"
+                            }]
+                        },
+                        options: { 
+                            plugins: { legend: { display: false } },
+                            scales: { y: { beginAtZero: true } }
+                        }
+                    });
+                } catch (err) {
+                    console.error("Rain chart error for " + name, err);
+                }
             }
         }
+
         loadData();
     </script>
 </body>
