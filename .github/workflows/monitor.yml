@@ -1,52 +1,24 @@
-name: Tree Drought Monitor
+name: Update Irrigation Data
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  issues: write
-
 jobs:
-  run-monitor:
-
+  update:
     runs-on: ubuntu-latest
-
     steps:
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
-
-      - name: Install dependencies
+          python-version: '3.9'
+      - run: pip install requests pandas
+      - run: python monitor.py
+      - name: Commit results
         run: |
-          pip install requests
-          pip install pandas
-
-      - name: Run drought monitor
-        run: python monitor.py
-
-      - name: Commit updated data
-        run: |
-          git config --global user.name "drought-monitor"
+          git config --global user.name "IrrigationBot"
           git config --global user.email "bot@example.com"
-          git add reports data
-          git commit -m "update drought monitor data" || echo "no changes"
+          git add data/history.csv reports/
+          git commit -m "Automated update" || exit 0
           git push
-
-      - name: Create drought alert issue
-        run: |
-          if [ -f alert.txt ]; then
-            echo "Creating drought alert issue"
-            gh issue create \
-              --title "⚠ Tree Drought Alert" \
-              --body "Severe drought stress predicted for: $(cat alert.txt)"
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
