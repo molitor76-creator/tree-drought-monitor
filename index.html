@@ -56,22 +56,30 @@
 
         async function loadData() {
             try {
-                // Fetch the CSV with a timestamp to prevent caching old data
                 const response = await fetch("data/history.csv?t=" + new Date().getTime());
                 const text = await response.text();
-                const rows = text.trim().split("\n").slice(1);
+                const lines = text.trim().split("\n");
                 
+                // Identify column headers
+                const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+                const dateIdx = headers.indexOf("date");
+                const locIdx = headers.indexOf("location");
+                const storageIdx = headers.indexOf("storage");
+                const irrigationIdx = headers.indexOf("irrigation");
+                const riskIdx = headers.indexOf("risk");
+
+                const rows = lines.slice(1);
                 let latest = {};
                 let dates = [], g = [], w = [], d = [];
 
-                // 1. Process all rows for the Trend Chart (History)
+                // 1. Process Trend Chart
                 rows.forEach(row => {
                     const c = row.split(",");
-                    if (c.length < 6) return; 
+                    if (c.length < 5) return; 
 
-                    let date = c[0].trim();
-                    let loc = c[1].trim();
-                    let storage = parseFloat(c[2]);
+                    let date = c[dateIdx].trim();
+                    let loc = c[locIdx].trim();
+                    let storage = parseFloat(c[storageIdx]);
 
                     if(!dates.includes(date)) { 
                         dates.push(date); g.push(null); w.push(null); d.push(null); 
@@ -82,16 +90,16 @@
                     if(loc === "Dettenhausen") d[i] = storage;
                 });
 
-                // 2. Find the LATEST valid status for each tile (Scanning file from bottom up)
+                // 2. Find Latest Status (Reverse scan)
                 for (let i = rows.length - 1; i >= 0; i--) {
                     const c = rows[i].split(",");
-                    if (c.length < 6) continue;
+                    if (c.length < 5) continue;
                     
-                    let loc = c[1].trim();
-                    let risk = c[5]?.trim().toUpperCase();
-                    let irrigation = c[4]?.trim();
+                    let loc = c[locIdx].trim();
+                    let risk = c[riskIdx]?.trim().toUpperCase();
+                    let irrigation = c[irrigationIdx]?.trim();
 
-                    if (!latest[loc]) {
+                    if (!latest[loc] && risk) {
                         latest[loc] = { irrigation, risk };
                     }
                 }
@@ -105,8 +113,8 @@
                 drawRainCharts();
 
             } catch (e) { 
-                console.error("Error loading data:", e);
-                document.querySelectorAll('.status').forEach(el => el.innerText = "Error Loading Data");
+                console.error("Data error:", e);
+                document.querySelectorAll('.status').forEach(el => el.innerText = "Check CSV Format");
             }
         }
 
@@ -114,9 +122,8 @@
             let s = document.getElementById(statusId);
             let r = document.getElementById(recoId);
             
-            if (!data || !data.risk) {
-                s.innerText = "No Data Found";
-                s.className = "status";
+            if (!data || !data.risk || data.risk === "") {
+                s.innerText = "Processing Data...";
                 return;
             }
 
@@ -127,13 +134,13 @@
             } else if (data.risk === "SOON") {
                 s.innerText = "⚠ Water Soon"; 
                 s.className = "status soon";
-                r.innerText = "Rain forecast is low.";
-            } else if (data.risk === "SAFE") {
+                r.innerText = "Soil drying out.";
+            } else if (data.risk === "SAFE" || data.risk === "LOW") {
                 s.innerText = "OK"; 
                 s.className = "status safe";
-                r.innerText = "Soil moisture is good.";
+                r.innerText = "Moisture is sufficient.";
             } else {
-                s.innerText = "Status: " + data.risk;
+                s.innerText = data.risk;
                 s.className = "status";
             }
         }
@@ -146,9 +153,9 @@
                 const loc = locations[name];
                 const risk = data[name]?.risk;
                 let color = "gray";
-                if(risk === "SAFE") color = "green";
-                if(risk === "SOON") color = "orange";
-                if(risk === "NOW") color = "red";
+                if(risk === "SAFE" || risk === "LOW") color = "green";
+                if(risk === "SOON" || risk === "MODERATE") color = "orange";
+                if(risk === "NOW" || risk === "HIGH" || risk === "SEVERE") color = "red";
 
                 L.circleMarker([loc.lat, loc.lon], {
                     color: color, 
@@ -169,10 +176,6 @@
                         {label: "Waging", data: w, borderColor: "blue", tension: 0.1, fill: false},
                         {label: "Dettenhausen", data: d, borderColor: "green", tension: 0.1, fill: false}
                     ]
-                },
-                options: {
-                    responsive: true,
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Soil Water (mm)' } } }
                 }
             });
         }
@@ -180,40 +183,17 @@
         async function drawRainCharts() {
             for (const name in locations) {
                 const {lat, lon} = locations[name];
-                try {
-                    const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`);
-                    const data = await response.json();
-                    
-                    // Convert weather dates to Weekdays
-                    const labels = data.daily.time.slice(1, 8).map(dateStr => {
-                        const date = new Date(dateStr);
-                        return date.toLocaleDateString('en-US', { weekday: 'short' });
-                    });
-
-                    const rainValues = data.daily.precipitation_sum.slice(1, 8);
-                    const canvasId = name === "Gauting" ? "rainG" : name === "Waging am See" ? "rainW" : "rainD";
-                    
-                    new Chart(document.getElementById(canvasId), {
-                        type: "bar",
-                        data: { 
-                            labels: labels, 
-                            datasets: [{
-                                label: "Rain (mm)", 
-                                data: rainValues, 
-                                backgroundColor: "rgba(54, 162, 235, 0.6)"
-                            }]
-                        },
-                        options: { 
-                            plugins: { legend: { display: false } },
-                            scales: { y: { beginAtZero: true } }
-                        }
-                    });
-                } catch (err) {
-                    console.error("Rain chart error for " + name, err);
-                }
+                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`);
+                const data = await response.json();
+                const labels = data.daily.time.slice(1, 8).map(d => new Date(d).toLocaleDateString('en-US', { weekday: 'short' }));
+                const canvasId = name === "Gauting" ? "rainG" : name === "Waging am See" ? "rainW" : "rainD";
+                new Chart(document.getElementById(canvasId), {
+                    type: "bar",
+                    data: { labels: labels, datasets: [{label: "Rain (mm)", data: data.daily.precipitation_sum.slice(1, 8), backgroundColor: "#36a2eb"}]},
+                    options: { plugins: { legend: { display: false } } }
+                });
             }
         }
-
         loadData();
     </script>
 </body>
