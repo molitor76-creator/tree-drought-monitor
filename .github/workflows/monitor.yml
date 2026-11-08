@@ -1,24 +1,72 @@
+
 name: Update Irrigation Data
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: "0 6 * * *"
+
   workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: tree-drought-monitor
+  cancel-in-progress: false
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.9'
-      - run: pip install requests pandas
-      - run: python monitor.py
-      - name: Commit results
+          python-version: "3.11"
+
+      - name: Install dependencies
         run: |
-          git config --global user.name "IrrigationBot"
-          git config --global user.email "bot@example.com"
-          git add data/history.csv reports/
-          git commit -m "Automated update" || exit 0
-          git push
+          python -m pip install --upgrade pip
+          python -m pip install requests pandas
+
+      - name: Run irrigation monitor
+        run: python monitor.py
+
+      - name: Save updated reports and data
+        run: |
+          git config user.name "Tree Irrigation Monitor"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to save."
+          else
+            git commit -m "Daily irrigation monitor update"
+            git push
+          fi
+
+      - name: Create irrigation alert
+        if: hashFiles('alert.txt') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh issue list \
+            --state open \
+            --search "in:title Tree Irrigation Alert" \
+            --json number \
+            --jq 'length')
+
+          if [ "$EXISTING" -eq 0 ]; then
+            gh issue create \
+              --title "Tree Irrigation Alert" \
+              --body-file alert.txt
+          else
+            echo "An irrigation alert is already open."
+          fi
