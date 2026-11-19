@@ -14,12 +14,12 @@
         :root {
             --bg: #0b1220;
             --surface: #141f32;
-            --surface2: #1a2940;
-            --border: rgba(148, 163, 184, 0.13);
+            --border: rgba(148,163,184,0.13);
             --text: #edf3fc;
             --muted: #94a3b8;
             --green: #34d399;
             --blue: #60a5fa;
+            --purple: #a78bfa;
             --amber: #fbbf24;
             --orange: #fb923c;
             --red: #f87171;
@@ -204,15 +204,8 @@
             letter-spacing: -0.7px;
         }
 
-        .metric-unit {
-            font-size: 11px;
-            font-weight: 500;
-            color: var(--muted);
-            margin-left: 3px;
-        }
-
-        .irrigation-value { color: var(--blue); }
         .water-value { color: var(--green); }
+        .irrigation-value { color: var(--blue); }
 
         .details {
             display: flex;
@@ -246,6 +239,16 @@
             border: 1px solid var(--border);
         }
 
+        /* Darken standard OpenStreetMap tiles without an API key. */
+        .leaflet-tile-pane {
+            filter: invert(100%) hue-rotate(180deg)
+                    brightness(85%) contrast(90%);
+        }
+
+        .leaflet-control-attribution {
+            font-size: 10px !important;
+        }
+
         .leaflet-popup-content-wrapper,
         .leaflet-popup-tip {
             background: #19273c;
@@ -261,7 +264,74 @@
             padding: 23px;
         }
 
-        .chart-container {
+        .chart-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 17px;
+        }
+
+        .chart-toolbar-label {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .range-controls {
+            display: flex;
+            gap: 6px;
+            padding: 4px;
+            background: rgba(5,12,24,0.45);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .range-button {
+            border: 0;
+            border-radius: 7px;
+            padding: 8px 13px;
+            background: transparent;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 650;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+
+        .range-button:hover {
+            color: var(--text);
+        }
+
+        .range-button.active {
+            background: #263c59;
+            color: #ffffff;
+        }
+
+        .chart-scroll {
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-color: #475569 #111c2e;
+            scrollbar-width: thin;
+            border-radius: 10px;
+        }
+
+        .chart-scroll::-webkit-scrollbar {
+            height: 9px;
+        }
+
+        .chart-scroll::-webkit-scrollbar-track {
+            background: #111c2e;
+            border-radius: 10px;
+        }
+
+        .chart-scroll::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 10px;
+        }
+
+        .chart-inner {
             height: 370px;
             position: relative;
         }
@@ -294,10 +364,49 @@
             margin-top: 3px;
         }
 
+        .legend-line {
+            width: 20px;
+            height: 0;
+            border-top: 2px solid;
+            flex: 0 0 20px;
+            margin-top: 7px;
+        }
+
+        .legend-dashed {
+            border-top-style: dashed;
+        }
+
         .legend-item strong {
             color: var(--text);
             display: block;
             margin-bottom: 3px;
+        }
+
+        .target-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .target-card {
+            border-radius: 11px;
+            padding: 12px;
+            background: rgba(5,12,24,0.32);
+            border: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .target-card strong {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text);
+        }
+
+        .target-value {
+            font-size: 17px;
+            font-weight: 750;
         }
 
         .explanation {
@@ -331,8 +440,9 @@
         @media (max-width: 680px) {
             body { padding: 17px; }
             .cards { grid-template-columns: 1fr; }
-            .legend-explanation { grid-template-columns: 1fr; }
-            .chart-container { height: 310px; }
+            .legend-explanation,
+            .target-summary { grid-template-columns: 1fr; }
+            .chart-inner { height: 310px; }
             #map { height: 320px; }
         }
     </style>
@@ -362,11 +472,11 @@
             <div class="metric-grid">
                 <div class="metric">
                     <div class="metric-label">AVAILABLE WATER</div>
-                    <div class="metric-value water-value" id="gWater">—<span class="metric-unit">mm</span></div>
+                    <div class="metric-value water-value" id="gWater">— mm</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">WATERING REQUIRED</div>
-                    <div class="metric-value irrigation-value" id="gIrrigation">—<span class="metric-unit">L/m²</span></div>
+                    <div class="metric-value irrigation-value" id="gIrrigation">— L/m²</div>
                 </div>
             </div>
             <div class="details">
@@ -386,11 +496,11 @@
             <div class="metric-grid">
                 <div class="metric">
                     <div class="metric-label">AVAILABLE WATER</div>
-                    <div class="metric-value water-value" id="wWater">—<span class="metric-unit">mm</span></div>
+                    <div class="metric-value water-value" id="wWater">— mm</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">WATERING REQUIRED</div>
-                    <div class="metric-value irrigation-value" id="wIrrigation">—<span class="metric-unit">L/m²</span></div>
+                    <div class="metric-value irrigation-value" id="wIrrigation">— L/m²</div>
                 </div>
             </div>
             <div class="details">
@@ -410,11 +520,11 @@
             <div class="metric-grid">
                 <div class="metric">
                     <div class="metric-label">AVAILABLE WATER</div>
-                    <div class="metric-value water-value" id="dWater">—<span class="metric-unit">mm</span></div>
+                    <div class="metric-value water-value" id="dWater">— mm</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">WATERING REQUIRED</div>
-                    <div class="metric-value irrigation-value" id="dIrrigation">—<span class="metric-unit">L/m²</span></div>
+                    <div class="metric-value irrigation-value" id="dIrrigation">— L/m²</div>
                 </div>
             </div>
             <div class="details">
@@ -438,12 +548,27 @@
     <h2>Soil Water Trend</h2>
     <p class="section-note">
         Estimated water stored in the modelled soil reservoir over time.
-        The colour of each point indicates the drought-severity classification.
+        Point colours indicate drought severity. Dashed lines show the
+        location-specific watering targets.
     </p>
 
     <div class="panel trend-panel">
-        <div class="chart-container">
-            <canvas id="trend"></canvas>
+
+        <div class="chart-toolbar">
+            <div class="chart-toolbar-label" id="chartRangeLabel">
+                Showing the last 90 days
+            </div>
+            <div class="range-controls">
+                <button class="range-button" data-range="30">30 days</button>
+                <button class="range-button active" data-range="90">90 days</button>
+                <button class="range-button" data-range="all">All history</button>
+            </div>
+        </div>
+
+        <div class="chart-scroll" id="chartScroll">
+            <div class="chart-inner" id="chartInner">
+                <canvas id="trend"></canvas>
+            </div>
         </div>
 
         <div class="legend-explanation">
@@ -476,34 +601,60 @@
                 </div>
             </div>
             <div class="legend-item">
-                <span class="legend-dot" style="background:#60a5fa"></span>
+                <span class="legend-line" style="border-color:#60a5fa"></span>
                 <div>
-                    <strong>WATER STORAGE</strong>
-                    The line value is estimated available water, measured in mm.
+                    <strong>AVAILABLE WATER</strong>
+                    Solid line: estimated water stored, measured in mm.
                 </div>
             </div>
             <div class="legend-item">
-                <span class="legend-dot" style="background:#94a3b8"></span>
+                <span class="legend-line legend-dashed" style="border-color:#60a5fa"></span>
                 <div>
                     <strong>WATERING TARGET</strong>
-                    The model aims to restore storage to 60% of assumed capacity.
+                    Dashed line: 60% of the assumed storage capacity.
                 </div>
+            </div>
+        </div>
+
+        <div class="target-summary">
+            <div class="target-card">
+                <strong>Gauting · Target</strong>
+                <span class="target-value" style="color:#60a5fa">60 mm</span>
+                <div>60% of 100 mm capacity</div>
+            </div>
+            <div class="target-card">
+                <strong>Waging am See · Target</strong>
+                <span class="target-value" style="color:#a78bfa">42 mm</span>
+                <div>60% of 70 mm capacity</div>
+            </div>
+            <div class="target-card">
+                <strong>Dettenhausen · Target</strong>
+                <span class="target-value" style="color:#34d399">108 mm</span>
+                <div>60% of 180 mm capacity</div>
             </div>
         </div>
 
         <div class="explanation">
             <strong>How to read the graph:</strong>
-            Each data point represents the model's estimated soil-water storage
-            on that date, in millimetres (mm). One millimetre is equivalent to
-            one litre of water per square metre. The point colour shows the
-            modelled drought severity. Hover over a point to see its exact
-            storage, severity and consecutive stress days.
+            Each point represents the model's estimated soil-water storage
+            on that date, in millimetres (mm). One millimetre is equivalent
+            to one litre of water per square metre. The point colour shows
+            the modelled drought severity. Hover over a point to see its
+            exact storage, severity and consecutive stress days.
 
             <br><br>
-            <strong>Important:</strong> These are model estimates, not direct
-            soil-moisture measurements. The model assumes all rainfall enters
-            the reservoir and uses reference evapotranspiration as a proxy for
-            water loss. The soil capacities are provisional assumptions.
+            <strong>Watering targets:</strong>
+            Each dashed line represents the model's target storage for that
+            location. The watering recommendation is the difference between
+            the current estimated storage and this target, expressed in
+            litres per square metre.
+
+            <br><br>
+            <strong>Important:</strong>
+            These are model estimates, not direct soil-moisture measurements.
+            The model assumes all rainfall enters the reservoir and uses
+            reference evapotranspiration as a proxy for water loss. The soil
+            capacities and the 60% target are provisional assumptions.
         </div>
     </div>
 
@@ -518,15 +669,18 @@
     const locations = {
         "Gauting": {
             lat: 48.067, lon: 11.377,
-            capacity: 100, prefix: "g"
+            capacity: 100, target: 60,
+            prefix: "g", color: "#60a5fa"
         },
         "Waging am See": {
             lat: 47.933, lon: 12.733,
-            capacity: 70, prefix: "w"
+            capacity: 70, target: 42,
+            prefix: "w", color: "#a78bfa"
         },
         "Dettenhausen": {
             lat: 48.605, lon: 9.106,
-            capacity: 180, prefix: "d"
+            capacity: 180, target: 108,
+            prefix: "d", color: "#34d399"
         }
     };
 
@@ -537,18 +691,15 @@
         "SEVERE": "#f87171"
     };
 
-    const locationColors = {
-        "Gauting": "#60a5fa",
-        "Waging am See": "#a78bfa",
-        "Dettenhausen": "#34d399"
-    };
-
+    let allRows = [];
     let trendChart = null;
     let map = null;
+    let selectedRange = "90";
     const rainCharts = {};
 
     function parseCSV(text) {
         const lines = text.trim().split(/\r?\n/);
+
         if (lines.length < 2) {
             throw new Error("CSV contains no data rows.");
         }
@@ -678,12 +829,12 @@
         map = L.map("map").setView([48.2, 11.6], 7);
 
         L.tileLayer(
-            "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
             {
                 attribution:
-                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: "abcd",
-                maxZoom: 19
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19,
+                className: "dark-map-tiles"
             }
         ).addTo(map);
 
@@ -691,7 +842,10 @@
             const loc = locations[name];
             const row = latest[name];
 
-            const risk = row ? (row.risk || "UNKNOWN").toUpperCase() : "UNKNOWN";
+            const risk = row
+                ? (row.risk || "UNKNOWN").toUpperCase()
+                : "UNKNOWN";
+
             const severity = row
                 ? severityFor(row, loc.capacity)
                 : "UNKNOWN";
@@ -721,142 +875,239 @@
                 weight: 2
             }).addTo(map).bindPopup(popup);
         });
+
+        setTimeout(() => map.invalidateSize(), 100);
     }
 
-    function drawTrend(rows) {
-        const sortedRows = [...rows].sort(
+    function getRowsForRange() {
+        const sorted = [...allRows].sort(
             (a, b) => a.date.localeCompare(b.date)
         );
 
-        const dates = [...new Set(sortedRows.map(row => row.date))];
+        if (selectedRange === "all" || sorted.length === 0) {
+            return sorted;
+        }
 
-        const datasets = Object.keys(locations).map(name => {
+        const latestDate = new Date(
+            sorted[sorted.length - 1].date + "T12:00:00"
+        );
+
+        const days = parseInt(selectedRange, 10);
+        const cutoff = new Date(latestDate);
+        cutoff.setDate(cutoff.getDate() - (days - 1));
+
+        const cutoffString =
+            cutoff.getFullYear() + "-" +
+            String(cutoff.getMonth() + 1).padStart(2, "0") + "-" +
+            String(cutoff.getDate()).padStart(2, "0");
+
+        return sorted.filter(row => row.date >= cutoffString);
+    }
+
+    function drawTrend() {
+        const rows = getRowsForRange();
+
+        const dates = [...new Set(rows.map(row => row.date))];
+
+        const chartInner = document.getElementById("chartInner");
+        const chartScroll = document.getElementById("chartScroll");
+
+        // Allocate more horizontal space as daily history grows.
+        const minimumWidth = Math.max(
+            850,
+            chartScroll.clientWidth
+        );
+
+        const desiredWidth = Math.max(
+            minimumWidth,
+            dates.length * 11 + 120
+        );
+
+        chartInner.style.width = desiredWidth + "px";
+
+        const datasets = [];
+
+        Object.keys(locations).forEach(name => {
             const loc = locations[name];
             const dataByDate = {};
 
-            sortedRows
+            rows
                 .filter(row => row.location === name)
                 .forEach(row => {
                     dataByDate[row.date] = row;
                 });
 
-            return {
+            const locationRows = dates.map(
+                date => dataByDate[date] || null
+            );
+
+            // Main storage history: solid line, severity-coloured points.
+            datasets.push({
                 label: name,
-                data: dates.map(date => {
-                    const row = dataByDate[date];
-                    return row ? number(row.storage) : null;
-                }),
-                borderColor: locationColors[name],
-                backgroundColor: locationColors[name],
-                borderWidth: 2.5,
-                tension: 0.28,
+                data: locationRows.map(row =>
+                    row ? number(row.storage) : null
+                ),
+                borderColor: loc.color,
+                backgroundColor: loc.color,
+                borderWidth: 2.2,
+                tension: 0.25,
                 spanGaps: false,
-                pointRadius: 4,
+                pointRadius: 2.8,
                 pointHoverRadius: 7,
-                pointBorderWidth: 1.5,
+                pointBorderWidth: 1,
                 pointBorderColor: "#111c2e",
-                pointBackgroundColor: dates.map(date => {
-                    const row = dataByDate[date];
-                    return row
-                        ? (severityColors[severityFor(row, loc.capacity)] || "#94a3b8")
-                        : locationColors[name];
-                }),
+                pointBackgroundColor: locationRows.map(row =>
+                    row
+                        ? (severityColors[
+                            severityFor(row, loc.capacity)
+                        ] || "#94a3b8")
+                        : loc.color
+                ),
                 pointHoverBorderWidth: 2,
                 pointHoverBorderColor: "#ffffff",
-                _rows: dates.map(date => dataByDate[date] || null)
-            };
+                _rows: locationRows
+            });
+
+            // Location-specific horizontal watering target.
+            datasets.push({
+                label: name + " target (" + loc.target + " mm)",
+                data: dates.map(() => loc.target),
+                borderColor: loc.color,
+                backgroundColor: loc.color,
+                borderWidth: 1.5,
+                borderDash: [7, 6],
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                tension: 0,
+                fill: false,
+                _isTarget: true
+            });
         });
 
         if (trendChart) {
             trendChart.destroy();
         }
 
-        const ctx = document.getElementById("trend");
-
-        trendChart = new Chart(ctx, {
-            type: "line",
-            data: {
-                labels: dates,
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: "nearest",
-                    intersect: true
+        trendChart = new Chart(
+            document.getElementById("trend"),
+            {
+                type: "line",
+                data: {
+                    labels: dates,
+                    datasets: datasets
                 },
-                plugins: {
-                    legend: {
-                        position: "top",
-                        labels: {
-                            color: "#cbd5e1",
-                            usePointStyle: true,
-                            pointStyle: "line",
-                            padding: 22,
-                            font: { size: 12 }
-                        }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: "nearest",
+                        intersect: true
                     },
-                    tooltip: {
-                        backgroundColor: "#0b1220",
-                        borderColor: "rgba(148,163,184,0.25)",
-                        borderWidth: 1,
-                        titleColor: "#edf3fc",
-                        bodyColor: "#cbd5e1",
-                        padding: 13,
-                        callbacks: {
-                            label: function(context) {
-                                const dataset = context.dataset;
-                                const row = dataset._rows[context.dataIndex];
-                                const value = context.parsed.y;
-
-                                let label = dataset.label + ": " +
-                                    (value === null ? "No data" : value.toFixed(1) + " mm");
-
-                                if (row) {
-                                    const severity = row.severity || "Historical data";
-                                    const stress = row.stress_days;
-
-                                    label += " · " + severity;
-
-                                    if (stress !== undefined && stress !== "") {
-                                        label += " · " + stress + " stress days";
-                                    }
+                    plugins: {
+                        legend: {
+                            position: "top",
+                            labels: {
+                                color: "#cbd5e1",
+                                usePointStyle: true,
+                                pointStyle: "line",
+                                padding: 18,
+                                font: { size: 11 },
+                                filter: function(item, chartData) {
+                                    // Keep both storage and target entries
+                                    // in the legend.
+                                    return true;
                                 }
+                            }
+                        },
+                        tooltip: {
+                            filter: function(item) {
+                                // Do not show tooltips for target lines.
+                                return !item.dataset._isTarget;
+                            },
+                            backgroundColor: "#0b1220",
+                            borderColor: "rgba(148,163,184,0.25)",
+                            borderWidth: 1,
+                            titleColor: "#edf3fc",
+                            bodyColor: "#cbd5e1",
+                            padding: 13,
+                            callbacks: {
+                                label: function(context) {
+                                    const dataset = context.dataset;
+                                    const row =
+                                        dataset._rows[context.dataIndex];
+                                    const value = context.parsed.y;
 
-                                return label;
+                                    let label = dataset.label + ": " +
+                                        (value === null
+                                            ? "No data"
+                                            : value.toFixed(1) + " mm");
+
+                                    if (row) {
+                                        const severity =
+                                            severityFor(
+                                                row,
+                                                locations[dataset.label].capacity
+                                            );
+
+                                        label += " · " + severity;
+
+                                        if (
+                                            row.stress_days !== undefined &&
+                                            row.stress_days !== ""
+                                        ) {
+                                            label +=
+                                                " · " + row.stress_days +
+                                                " consecutive stress days";
+                                        }
+                                    }
+
+                                    return label;
+                                }
                             }
                         }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: "#94a3b8",
-                            maxTicksLimit: 12,
-                            maxRotation: 0
-                        },
-                        grid: {
-                            color: "rgba(148,163,184,0.08)"
-                        }
                     },
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: "Estimated available water (mm)",
-                            color: "#94a3b8"
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: "#94a3b8",
+                                maxTicksLimit: Math.min(18, dates.length),
+                                maxRotation: 0,
+                                autoSkip: true
+                            },
+                            grid: {
+                                color: "rgba(148,163,184,0.08)"
+                            }
                         },
-                        ticks: {
-                            color: "#94a3b8"
-                        },
-                        grid: {
-                            color: "rgba(148,163,184,0.10)"
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: "Estimated available water (mm)",
+                                color: "#94a3b8"
+                            },
+                            ticks: {
+                                color: "#94a3b8"
+                            },
+                            grid: {
+                                color: "rgba(148,163,184,0.10)"
+                            }
                         }
                     }
                 }
             }
-        });
+        );
+
+        if (selectedRange === "all") {
+            setText(
+                "chartRangeLabel",
+                "Showing all " + dates.length + " daily observations"
+            );
+        } else {
+            setText(
+                "chartRangeLabel",
+                "Showing the last " + selectedRange + " days"
+            );
+        }
     }
 
     async function drawRainCharts() {
@@ -873,7 +1124,9 @@
                     `&daily=precipitation_sum&forecast_days=7&timezone=Europe%2FBerlin`;
 
                 const response = await fetch(url);
-                if (!response.ok) throw new Error("Rain forecast unavailable");
+                if (!response.ok) {
+                    throw new Error("Rain forecast unavailable");
+                }
 
                 const data = await response.json();
 
@@ -942,13 +1195,35 @@
                         }
                     }
                 );
+
             } catch (error) {
-                console.error("Rain forecast error for " + name, error);
-                const container = document.getElementById(canvasId).parentElement;
+                console.error(
+                    "Rain forecast error for " + name,
+                    error
+                );
+
+                const container =
+                    document.getElementById(canvasId).parentElement;
+
                 container.innerHTML =
                     '<div class="error">Rain forecast temporarily unavailable.</div>';
             }
         }
+    }
+
+    function setupRangeControls() {
+        document.querySelectorAll(".range-button").forEach(button => {
+            button.addEventListener("click", () => {
+                selectedRange = button.dataset.range;
+
+                document.querySelectorAll(".range-button")
+                    .forEach(item => item.classList.remove("active"));
+
+                button.classList.add("active");
+
+                drawTrend();
+            });
+        });
     }
 
     async function loadData() {
@@ -962,7 +1237,7 @@
             }
 
             const text = await response.text();
-            const rows = parseCSV(text);
+            allRows = parseCSV(text);
 
             const required = [
                 "date", "location", "storage",
@@ -980,7 +1255,7 @@
                 );
             }
 
-            const latest = latestRecords(rows);
+            const latest = latestRecords(allRows);
 
             updateCard("Gauting", latest["Gauting"]);
             updateCard("Waging am See", latest["Waging am See"]);
@@ -998,12 +1273,14 @@
                     : "No data date available"
             );
 
+            setupRangeControls();
             drawMap(latest);
-            drawTrend(rows);
+            drawTrend();
             drawRainCharts();
 
         } catch (error) {
             console.error("Dashboard data error:", error);
+
             document.getElementById("lastUpdated").textContent =
                 "Data loading error";
 
@@ -1018,4 +1295,3 @@
 </script>
 </body>
 </html>
-
