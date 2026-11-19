@@ -1,200 +1,1021 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tree Irrigation Monitor</title>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f3f6fb; }
-        .cards { display: flex; gap: 20px; margin-bottom: 30px; }
-        .card { flex: 1; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .status { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
-        .safe { color: green; }
-        .soon { color: orange; }
-        .now { color: red; }
-        #map { height: 400px; margin-top: 30px; border-radius: 10px; }
-        canvas { margin-top: 10px; }
+        :root {
+            --bg: #0b1220;
+            --surface: #141f32;
+            --surface2: #1a2940;
+            --border: rgba(148, 163, 184, 0.13);
+            --text: #edf3fc;
+            --muted: #94a3b8;
+            --green: #34d399;
+            --blue: #60a5fa;
+            --amber: #fbbf24;
+            --orange: #fb923c;
+            --red: #f87171;
+            --shadow: 0 12px 35px rgba(0,0,0,0.28);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 32px;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+                         "Segoe UI", sans-serif;
+            background:
+                radial-gradient(ellipse at 10% 0%, rgba(37,99,235,0.13), transparent 35%),
+                radial-gradient(ellipse at 90% 15%, rgba(16,185,129,0.08), transparent 30%),
+                var(--bg);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: clamp(25px, 3vw, 34px);
+            margin: 0 0 7px;
+            font-weight: 750;
+            letter-spacing: -0.8px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .updated {
+            color: var(--muted);
+            font-size: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 10px 15px;
+            border-radius: 12px;
+        }
+
+        h2 {
+            font-size: 19px;
+            letter-spacing: -0.3px;
+            margin: 34px 0 16px;
+        }
+
+        .section-note {
+            color: var(--muted);
+            font-size: 13px;
+            margin: -8px 0 18px;
+            line-height: 1.6;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .card, .panel {
+            background: linear-gradient(145deg, #19273c, #111c2e);
+            border: 1px solid var(--border);
+            border-radius: 19px;
+            box-shadow: var(--shadow);
+        }
+
+        .card {
+            padding: 23px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.38);
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #3b82f6, #34d399);
+            opacity: 0.8;
+        }
+
+        .location-name {
+            font-size: 17px;
+            font-weight: 700;
+            margin-bottom: 17px;
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 19px;
+        }
+
+        .status {
+            font-size: 12px;
+            font-weight: 750;
+            letter-spacing: 0.7px;
+            padding: 7px 11px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        .safe {
+            color: var(--green);
+            background: rgba(52,211,153,0.12);
+        }
+
+        .soon {
+            color: var(--amber);
+            background: rgba(251,191,36,0.12);
+        }
+
+        .now {
+            color: var(--red);
+            background: rgba(248,113,113,0.13);
+        }
+
+        .unknown {
+            color: var(--muted);
+            background: rgba(148,163,184,0.12);
+        }
+
+        .severity {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 650;
+        }
+
+        .severity.low { color: var(--green); }
+        .severity.moderate { color: var(--amber); }
+        .severity.high { color: var(--orange); }
+        .severity.severe { color: var(--red); }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .metric {
+            background: rgba(5,12,24,0.36);
+            border: 1px solid rgba(148,163,184,0.09);
+            border-radius: 12px;
+            padding: 13px;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 11px;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 25px;
+            font-weight: 750;
+            letter-spacing: -0.7px;
+        }
+
+        .metric-unit {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--muted);
+            margin-left: 3px;
+        }
+
+        .irrigation-value { color: var(--blue); }
+        .water-value { color: var(--green); }
+
+        .details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+            color: var(--muted);
+            font-size: 12px;
+            margin: 12px 0 16px;
+        }
+
+        .rain-title {
+            color: var(--muted);
+            font-size: 11px;
+            margin-top: 12px;
+            margin-bottom: 3px;
+        }
+
+        .rain-chart {
+            height: 115px;
+            position: relative;
+        }
+
+        .panel {
+            padding: 22px;
+        }
+
+        #map {
+            height: 390px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .leaflet-popup-content-wrapper,
+        .leaflet-popup-tip {
+            background: #19273c;
+            color: #edf3fc;
+        }
+
+        .leaflet-popup-content {
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .trend-panel {
+            padding: 23px;
+        }
+
+        .chart-container {
+            height: 370px;
+            position: relative;
+        }
+
+        .legend-explanation {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            background: rgba(5,12,24,0.32);
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            padding: 12px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex: 0 0 10px;
+            margin-top: 3px;
+        }
+
+        .legend-item strong {
+            color: var(--text);
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .explanation {
+            margin-top: 17px;
+            padding: 15px;
+            border-radius: 11px;
+            background: rgba(96,165,250,0.07);
+            border: 1px solid rgba(96,165,250,0.14);
+            color: #b7c8dd;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        .footer {
+            margin-top: 28px;
+            color: var(--muted);
+            font-size: 11px;
+            text-align: center;
+            line-height: 1.7;
+        }
+
+        .error {
+            color: var(--red);
+            font-size: 13px;
+        }
+
+        @media (max-width: 1050px) {
+            .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 680px) {
+            body { padding: 17px; }
+            .cards { grid-template-columns: 1fr; }
+            .legend-explanation { grid-template-columns: 1fr; }
+            .chart-container { height: 310px; }
+            #map { height: 320px; }
+        }
     </style>
 </head>
+
 <body>
-    <h1>Tree Irrigation Monitor</h1>
-    
-    <div class="cards">
-        <div class="card">
-            <h3>Gauting</h3>
-            <div id="gStatus" class="status">Loading...</div>
-            <div id="gReco"></div>
-            <canvas id="rainG"></canvas>
+<div class="container">
+
+    <header>
+        <div>
+            <h1>Tree Irrigation Monitor</h1>
+            <div class="subtitle">
+                Soil water availability · Irrigation planning · Local weather outlook
+            </div>
         </div>
+        <div class="updated" id="lastUpdated">Loading data...</div>
+    </header>
+
+    <section class="cards">
+
         <div class="card">
-            <h3>Waging am See</h3>
-            <div id="wStatus" class="status">Loading...</div>
-            <div id="wReco"></div>
-            <canvas id="rainW"></canvas>
+            <div class="location-name">Gauting</div>
+            <div class="status-row">
+                <div id="gStatus" class="status unknown">Loading...</div>
+                <div id="gSeverity" class="severity">Severity: —</div>
+            </div>
+            <div class="metric-grid">
+                <div class="metric">
+                    <div class="metric-label">AVAILABLE WATER</div>
+                    <div class="metric-value water-value" id="gWater">—<span class="metric-unit">mm</span></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">WATERING REQUIRED</div>
+                    <div class="metric-value irrigation-value" id="gIrrigation">—<span class="metric-unit">L/m²</span></div>
+                </div>
+            </div>
+            <div class="details">
+                <span id="gFuture">7-day outlook: —</span>
+                <span id="gStress">Stress days: —</span>
+            </div>
+            <div class="rain-title">7-DAY RAINFALL FORECAST (mm)</div>
+            <div class="rain-chart"><canvas id="rainG"></canvas></div>
         </div>
+
         <div class="card">
-            <h3>Dettenhausen</h3>
-            <div id="dStatus" class="status">Loading...</div>
-            <div id="dReco"></div>
-            <canvas id="rainD"></canvas>
+            <div class="location-name">Waging am See</div>
+            <div class="status-row">
+                <div id="wStatus" class="status unknown">Loading...</div>
+                <div id="wSeverity" class="severity">Severity: —</div>
+            </div>
+            <div class="metric-grid">
+                <div class="metric">
+                    <div class="metric-label">AVAILABLE WATER</div>
+                    <div class="metric-value water-value" id="wWater">—<span class="metric-unit">mm</span></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">WATERING REQUIRED</div>
+                    <div class="metric-value irrigation-value" id="wIrrigation">—<span class="metric-unit">L/m²</span></div>
+                </div>
+            </div>
+            <div class="details">
+                <span id="wFuture">7-day outlook: —</span>
+                <span id="wStress">Stress days: —</span>
+            </div>
+            <div class="rain-title">7-DAY RAINFALL FORECAST (mm)</div>
+            <div class="rain-chart"><canvas id="rainW"></canvas></div>
+        </div>
+
+        <div class="card">
+            <div class="location-name">Dettenhausen</div>
+            <div class="status-row">
+                <div id="dStatus" class="status unknown">Loading...</div>
+                <div id="dSeverity" class="severity">Severity: —</div>
+            </div>
+            <div class="metric-grid">
+                <div class="metric">
+                    <div class="metric-label">AVAILABLE WATER</div>
+                    <div class="metric-value water-value" id="dWater">—<span class="metric-unit">mm</span></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">WATERING REQUIRED</div>
+                    <div class="metric-value irrigation-value" id="dIrrigation">—<span class="metric-unit">L/m²</span></div>
+                </div>
+            </div>
+            <div class="details">
+                <span id="dFuture">7-day outlook: —</span>
+                <span id="dStress">Stress days: —</span>
+            </div>
+            <div class="rain-title">7-DAY RAINFALL FORECAST (mm)</div>
+            <div class="rain-chart"><canvas id="rainD"></canvas></div>
+        </div>
+
+    </section>
+
+    <h2>Location Overview</h2>
+    <p class="section-note">
+        Current irrigation risk at the three monitored tree locations.
+    </p>
+    <div class="panel">
+        <div id="map"></div>
+    </div>
+
+    <h2>Soil Water Trend</h2>
+    <p class="section-note">
+        Estimated water stored in the modelled soil reservoir over time.
+        The colour of each point indicates the drought-severity classification.
+    </p>
+
+    <div class="panel trend-panel">
+        <div class="chart-container">
+            <canvas id="trend"></canvas>
+        </div>
+
+        <div class="legend-explanation">
+            <div class="legend-item">
+                <span class="legend-dot" style="background:#34d399"></span>
+                <div>
+                    <strong>LOW</strong>
+                    At least 50% of assumed soil-water capacity remains.
+                </div>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot" style="background:#fbbf24"></span>
+                <div>
+                    <strong>MODERATE</strong>
+                    Water storage is between 25% and 50% of capacity.
+                </div>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot" style="background:#fb923c"></span>
+                <div>
+                    <strong>HIGH</strong>
+                    Water storage is below 25% of capacity.
+                </div>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot" style="background:#f87171"></span>
+                <div>
+                    <strong>SEVERE</strong>
+                    Storage is below 25% for at least seven consecutive days.
+                </div>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot" style="background:#60a5fa"></span>
+                <div>
+                    <strong>WATER STORAGE</strong>
+                    The line value is estimated available water, measured in mm.
+                </div>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot" style="background:#94a3b8"></span>
+                <div>
+                    <strong>WATERING TARGET</strong>
+                    The model aims to restore storage to 60% of assumed capacity.
+                </div>
+            </div>
+        </div>
+
+        <div class="explanation">
+            <strong>How to read the graph:</strong>
+            Each data point represents the model's estimated soil-water storage
+            on that date, in millimetres (mm). One millimetre is equivalent to
+            one litre of water per square metre. The point colour shows the
+            modelled drought severity. Hover over a point to see its exact
+            storage, severity and consecutive stress days.
+
+            <br><br>
+            <strong>Important:</strong> These are model estimates, not direct
+            soil-moisture measurements. The model assumes all rainfall enters
+            the reservoir and uses reference evapotranspiration as a proxy for
+            water loss. The soil capacities are provisional assumptions.
         </div>
     </div>
 
-    <h2>Irrigation Risk Map</h2>
-    <div id="map"></div>
+    <div class="footer">
+        Tree Irrigation Monitor · Weather data from Open-Meteo ·
+        Map data © OpenStreetMap contributors
+    </div>
 
-    <h2>Soil Water Trend</h2>
-    <canvas id="trend"></canvas>
+</div>
 
-    <script>
-        const locations = {
-            "Gauting": {lat: 48.067, lon: 11.377},
-            "Waging am See": {lat: 47.933, lon: 12.733},
-            "Dettenhausen": {lat: 48.605, lon: 9.106}
-        };
+<script>
+    const locations = {
+        "Gauting": {
+            lat: 48.067, lon: 11.377,
+            capacity: 100, prefix: "g"
+        },
+        "Waging am See": {
+            lat: 47.933, lon: 12.733,
+            capacity: 70, prefix: "w"
+        },
+        "Dettenhausen": {
+            lat: 48.605, lon: 9.106,
+            capacity: 180, prefix: "d"
+        }
+    };
 
-        async function loadData() {
+    const severityColors = {
+        "LOW": "#34d399",
+        "MODERATE": "#fbbf24",
+        "HIGH": "#fb923c",
+        "SEVERE": "#f87171"
+    };
+
+    const locationColors = {
+        "Gauting": "#60a5fa",
+        "Waging am See": "#a78bfa",
+        "Dettenhausen": "#34d399"
+    };
+
+    let trendChart = null;
+    let map = null;
+    const rainCharts = {};
+
+    function parseCSV(text) {
+        const lines = text.trim().split(/\r?\n/);
+        if (lines.length < 2) {
+            throw new Error("CSV contains no data rows.");
+        }
+
+        const headers = lines[0].split(",").map(h => h.trim());
+
+        return lines.slice(1)
+            .filter(line => line.trim() !== "")
+            .map(line => {
+                const values = line.split(",");
+                const row = {};
+
+                headers.forEach((header, index) => {
+                    row[header] = (values[index] || "").trim();
+                });
+
+                return row;
+            });
+    }
+
+    function number(value) {
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function severityFor(row, capacity) {
+        if (row.severity) return row.severity.toUpperCase();
+
+        const storage = number(row.storage);
+        if (storage === null) return "UNKNOWN";
+
+        const ratio = storage / capacity;
+
+        if (ratio < 0.25) return "HIGH";
+        if (ratio < 0.50) return "MODERATE";
+        return "LOW";
+    }
+
+    function latestRecords(rows) {
+        const latest = {};
+
+        rows.forEach(row => {
+            if (!row.location || !row.date) return;
+
+            if (
+                !latest[row.location] ||
+                row.date > latest[row.location].date
+            ) {
+                latest[row.location] = row;
+            }
+        });
+
+        return latest;
+    }
+
+    function setText(id, value) {
+        document.getElementById(id).textContent = value;
+    }
+
+    function updateCard(name, row) {
+        const prefix = locations[name].prefix;
+        const capacity = locations[name].capacity;
+
+        if (!row) {
+            setText(prefix + "Status", "NO DATA");
+            setText(prefix + "Severity", "Severity: —");
+            return;
+        }
+
+        const storage = number(row.storage);
+        const future = number(row.future_storage);
+        const irrigation = number(row.irrigation);
+        const stressDays = number(row.stress_days);
+        const severity = severityFor(row, capacity);
+        const risk = (row.risk || "UNKNOWN").toUpperCase();
+
+        setText(
+            prefix + "Water",
+            storage === null ? "— mm" : storage.toFixed(1) + " mm"
+        );
+
+        setText(
+            prefix + "Irrigation",
+            irrigation === null ? "— L/m²" : irrigation.toFixed(1) + " L/m²"
+        );
+
+        setText(
+            prefix + "Future",
+            "7-day outlook: " +
+            (future === null ? "—" : future.toFixed(1) + " mm")
+        );
+
+        setText(
+            prefix + "Stress",
+            "Stress days: " +
+            (stressDays === null ? "—" : stressDays)
+        );
+
+        const statusElement = document.getElementById(prefix + "Status");
+        statusElement.className = "status";
+
+        if (risk === "NOW") {
+            statusElement.textContent = "WATER NOW";
+            statusElement.classList.add("now");
+        } else if (risk === "SOON") {
+            statusElement.textContent = "WATER SOON";
+            statusElement.classList.add("soon");
+        } else if (risk === "SAFE") {
+            statusElement.textContent = "SAFE";
+            statusElement.classList.add("safe");
+        } else {
+            statusElement.textContent = risk;
+            statusElement.classList.add("unknown");
+        }
+
+        const severityElement = document.getElementById(prefix + "Severity");
+        severityElement.textContent = "Severity: " + severity;
+        severityElement.className =
+            "severity " + severity.toLowerCase();
+    }
+
+    function drawMap(latest) {
+        if (map) {
+            map.remove();
+        }
+
+        map = L.map("map").setView([48.2, 11.6], 7);
+
+        L.tileLayer(
+            "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+            {
+                attribution:
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: "abcd",
+                maxZoom: 19
+            }
+        ).addTo(map);
+
+        Object.keys(locations).forEach(name => {
+            const loc = locations[name];
+            const row = latest[name];
+
+            const risk = row ? (row.risk || "UNKNOWN").toUpperCase() : "UNKNOWN";
+            const severity = row
+                ? severityFor(row, loc.capacity)
+                : "UNKNOWN";
+
+            let color = "#94a3b8";
+
+            if (risk === "SAFE") color = "#34d399";
+            if (risk === "SOON") color = "#fbbf24";
+            if (risk === "NOW") color = "#f87171";
+
+            const storage = row ? number(row.storage) : null;
+            const irrigation = row ? number(row.irrigation) : null;
+
+            const popup = `
+                <strong>${name}</strong><br>
+                Status: ${risk}<br>
+                Severity: ${severity}<br>
+                Available water: ${storage === null ? "—" : storage.toFixed(1) + " mm"}<br>
+                Watering requirement: ${irrigation === null ? "—" : irrigation.toFixed(1) + " L/m²"}
+            `;
+
+            L.circleMarker([loc.lat, loc.lon], {
+                color: color,
+                fillColor: color,
+                radius: 11,
+                fillOpacity: 0.85,
+                weight: 2
+            }).addTo(map).bindPopup(popup);
+        });
+    }
+
+    function drawTrend(rows) {
+        const sortedRows = [...rows].sort(
+            (a, b) => a.date.localeCompare(b.date)
+        );
+
+        const dates = [...new Set(sortedRows.map(row => row.date))];
+
+        const datasets = Object.keys(locations).map(name => {
+            const loc = locations[name];
+            const dataByDate = {};
+
+            sortedRows
+                .filter(row => row.location === name)
+                .forEach(row => {
+                    dataByDate[row.date] = row;
+                });
+
+            return {
+                label: name,
+                data: dates.map(date => {
+                    const row = dataByDate[date];
+                    return row ? number(row.storage) : null;
+                }),
+                borderColor: locationColors[name],
+                backgroundColor: locationColors[name],
+                borderWidth: 2.5,
+                tension: 0.28,
+                spanGaps: false,
+                pointRadius: 4,
+                pointHoverRadius: 7,
+                pointBorderWidth: 1.5,
+                pointBorderColor: "#111c2e",
+                pointBackgroundColor: dates.map(date => {
+                    const row = dataByDate[date];
+                    return row
+                        ? (severityColors[severityFor(row, loc.capacity)] || "#94a3b8")
+                        : locationColors[name];
+                }),
+                pointHoverBorderWidth: 2,
+                pointHoverBorderColor: "#ffffff",
+                _rows: dates.map(date => dataByDate[date] || null)
+            };
+        });
+
+        if (trendChart) {
+            trendChart.destroy();
+        }
+
+        const ctx = document.getElementById("trend");
+
+        trendChart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: dates,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: "nearest",
+                    intersect: true
+                },
+                plugins: {
+                    legend: {
+                        position: "top",
+                        labels: {
+                            color: "#cbd5e1",
+                            usePointStyle: true,
+                            pointStyle: "line",
+                            padding: 22,
+                            font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: "#0b1220",
+                        borderColor: "rgba(148,163,184,0.25)",
+                        borderWidth: 1,
+                        titleColor: "#edf3fc",
+                        bodyColor: "#cbd5e1",
+                        padding: 13,
+                        callbacks: {
+                            label: function(context) {
+                                const dataset = context.dataset;
+                                const row = dataset._rows[context.dataIndex];
+                                const value = context.parsed.y;
+
+                                let label = dataset.label + ": " +
+                                    (value === null ? "No data" : value.toFixed(1) + " mm");
+
+                                if (row) {
+                                    const severity = row.severity || "Historical data";
+                                    const stress = row.stress_days;
+
+                                    label += " · " + severity;
+
+                                    if (stress !== undefined && stress !== "") {
+                                        label += " · " + stress + " stress days";
+                                    }
+                                }
+
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: "#94a3b8",
+                            maxTicksLimit: 12,
+                            maxRotation: 0
+                        },
+                        grid: {
+                            color: "rgba(148,163,184,0.08)"
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: "Estimated available water (mm)",
+                            color: "#94a3b8"
+                        },
+                        ticks: {
+                            color: "#94a3b8"
+                        },
+                        grid: {
+                            color: "rgba(148,163,184,0.10)"
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    async function drawRainCharts() {
+        for (const name of Object.keys(locations)) {
+            const loc = locations[name];
+            const canvasId =
+                name === "Gauting" ? "rainG" :
+                name === "Waging am See" ? "rainW" : "rainD";
+
             try {
-                const response = await fetch("data/history.csv?t=" + new Date().getTime());
-                const text = await response.text();
-                const lines = text.trim().split("\n");
-                
-                // Identify column headers
-                const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
-                const dateIdx = headers.indexOf("date");
-                const locIdx = headers.indexOf("location");
-                const storageIdx = headers.indexOf("storage");
-                const irrigationIdx = headers.indexOf("irrigation");
-                const riskIdx = headers.indexOf("risk");
+                const url =
+                    `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}` +
+                    `&longitude=${loc.lon}` +
+                    `&daily=precipitation_sum&forecast_days=7&timezone=Europe%2FBerlin`;
 
-                const rows = lines.slice(1);
-                let latest = {};
-                let dates = [], g = [], w = [], d = [];
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Rain forecast unavailable");
 
-                // 1. Process Trend Chart
-                rows.forEach(row => {
-                    const c = row.split(",");
-                    if (c.length < 5) return; 
-
-                    let date = c[dateIdx].trim();
-                    let loc = c[locIdx].trim();
-                    let storage = parseFloat(c[storageIdx]);
-
-                    if(!dates.includes(date)) { 
-                        dates.push(date); g.push(null); w.push(null); d.push(null); 
-                    }
-                    let i = dates.indexOf(date);
-                    if(loc === "Gauting") g[i] = storage;
-                    if(loc === "Waging am See") w[i] = storage;
-                    if(loc === "Dettenhausen") d[i] = storage;
-                });
-
-                // 2. Find Latest Status (Reverse scan)
-                for (let i = rows.length - 1; i >= 0; i--) {
-                    const c = rows[i].split(",");
-                    if (c.length < 5) continue;
-                    
-                    let loc = c[locIdx].trim();
-                    let risk = c[riskIdx]?.trim().toUpperCase();
-                    let irrigation = c[irrigationIdx]?.trim();
-
-                    if (!latest[loc] && risk) {
-                        latest[loc] = { irrigation, risk };
-                    }
-                }
-
-                updateCard("Gauting", "gStatus", "gReco", latest["Gauting"]);
-                updateCard("Waging am See", "wStatus", "wReco", latest["Waging am See"]);
-                updateCard("Dettenhausen", "dStatus", "dReco", latest["Dettenhausen"]);
-                
-                drawMap(latest);
-                drawTrend(dates, g, w, d);
-                drawRainCharts();
-
-            } catch (e) { 
-                console.error("Data error:", e);
-                document.querySelectorAll('.status').forEach(el => el.innerText = "Check CSV Format");
-            }
-        }
-
-        function updateCard(name, statusId, recoId, data) {
-            let s = document.getElementById(statusId);
-            let r = document.getElementById(recoId);
-            
-            if (!data || !data.risk || data.risk === "") {
-                s.innerText = "Processing Data...";
-                return;
-            }
-
-            if (data.risk === "NOW") {
-                s.innerText = "⚠ WATER NOW"; 
-                s.className = "status now";
-                r.innerText = "Recommended: " + data.irrigation + " mm";
-            } else if (data.risk === "SOON") {
-                s.innerText = "⚠ Water Soon"; 
-                s.className = "status soon";
-                r.innerText = "Soil drying out.";
-            } else if (data.risk === "SAFE" || data.risk === "LOW") {
-                s.innerText = "OK"; 
-                s.className = "status safe";
-                r.innerText = "Moisture is sufficient.";
-            } else {
-                s.innerText = data.risk;
-                s.className = "status";
-            }
-        }
-
-        function drawMap(data) {
-            const map = L.map('map').setView([48.2, 11.6], 7);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-            
-            Object.keys(locations).forEach(name => {
-                const loc = locations[name];
-                const risk = data[name]?.risk;
-                let color = "gray";
-                if(risk === "SAFE" || risk === "LOW") color = "green";
-                if(risk === "SOON" || risk === "MODERATE") color = "orange";
-                if(risk === "NOW" || risk === "HIGH" || risk === "SEVERE") color = "red";
-
-                L.circleMarker([loc.lat, loc.lon], {
-                    color: color, 
-                    radius: 12, 
-                    fillOpacity: 0.8,
-                    weight: 2
-                }).addTo(map).bindPopup(`<b>${name}</b><br>Status: ${risk || 'Unknown'}`);
-            });
-        }
-
-        function drawTrend(dates, g, w, d) {
-            new Chart(document.getElementById("trend"), {
-                type: "line",
-                data: { 
-                    labels: dates, 
-                    datasets: [
-                        {label: "Gauting", data: g, borderColor: "red", tension: 0.1, fill: false},
-                        {label: "Waging", data: w, borderColor: "blue", tension: 0.1, fill: false},
-                        {label: "Dettenhausen", data: d, borderColor: "green", tension: 0.1, fill: false}
-                    ]
-                }
-            });
-        }
-
-        async function drawRainCharts() {
-            for (const name in locations) {
-                const {lat, lon} = locations[name];
-                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&timezone=Europe%2FBerlin`);
                 const data = await response.json();
-                const labels = data.daily.time.slice(1, 8).map(d => new Date(d).toLocaleDateString('en-US', { weekday: 'short' }));
-                const canvasId = name === "Gauting" ? "rainG" : name === "Waging am See" ? "rainW" : "rainD";
-                new Chart(document.getElementById(canvasId), {
-                    type: "bar",
-                    data: { labels: labels, datasets: [{label: "Rain (mm)", data: data.daily.precipitation_sum.slice(1, 8), backgroundColor: "#36a2eb"}]},
-                    options: { plugins: { legend: { display: false } } }
-                });
+
+                const labels = data.daily.time.map(date =>
+                    new Date(date + "T12:00:00").toLocaleDateString(
+                        "en-US", { weekday: "short" }
+                    )
+                );
+
+                const values = data.daily.precipitation_sum;
+
+                if (rainCharts[canvasId]) {
+                    rainCharts[canvasId].destroy();
+                }
+
+                rainCharts[canvasId] = new Chart(
+                    document.getElementById(canvasId),
+                    {
+                        type: "bar",
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: "Rainfall (mm)",
+                                data: values,
+                                backgroundColor: "rgba(96,165,250,0.65)",
+                                borderColor: "#60a5fa",
+                                borderWidth: 1,
+                                borderRadius: 5
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    backgroundColor: "#0b1220",
+                                    titleColor: "#edf3fc",
+                                    bodyColor: "#cbd5e1",
+                                    callbacks: {
+                                        label: context =>
+                                            context.parsed.y.toFixed(1) + " mm"
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        color: "#94a3b8",
+                                        font: { size: 10 }
+                                    },
+                                    grid: { display: false }
+                                },
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        color: "#94a3b8",
+                                        font: { size: 9 },
+                                        maxTicksLimit: 4
+                                    },
+                                    grid: {
+                                        color: "rgba(148,163,184,0.08)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error("Rain forecast error for " + name, error);
+                const container = document.getElementById(canvasId).parentElement;
+                container.innerHTML =
+                    '<div class="error">Rain forecast temporarily unavailable.</div>';
             }
         }
-        loadData();
-    </script>
+    }
+
+    async function loadData() {
+        try {
+            const response = await fetch(
+                "data/history.csv?t=" + new Date().getTime()
+            );
+
+            if (!response.ok) {
+                throw new Error("Could not load history.csv");
+            }
+
+            const text = await response.text();
+            const rows = parseCSV(text);
+
+            const required = [
+                "date", "location", "storage",
+                "future_storage", "irrigation", "risk"
+            ];
+
+            const headers = text.trim().split(/\r?\n/)[0].split(",");
+            const missing = required.filter(
+                field => !headers.includes(field)
+            );
+
+            if (missing.length) {
+                throw new Error(
+                    "CSV is missing columns: " + missing.join(", ")
+                );
+            }
+
+            const latest = latestRecords(rows);
+
+            updateCard("Gauting", latest["Gauting"]);
+            updateCard("Waging am See", latest["Waging am See"]);
+            updateCard("Dettenhausen", latest["Dettenhausen"]);
+
+            const latestDates = Object.values(latest)
+                .map(row => row.date)
+                .filter(Boolean)
+                .sort();
+
+            setText(
+                "lastUpdated",
+                latestDates.length
+                    ? "Latest data: " + latestDates[latestDates.length - 1]
+                    : "No data date available"
+            );
+
+            drawMap(latest);
+            drawTrend(rows);
+            drawRainCharts();
+
+        } catch (error) {
+            console.error("Dashboard data error:", error);
+            document.getElementById("lastUpdated").textContent =
+                "Data loading error";
+
+            document.querySelectorAll(".status").forEach(element => {
+                element.textContent = "CHECK DATA";
+                element.className = "status now";
+            });
+        }
+    }
+
+    loadData();
+</script>
 </body>
 </html>
+
