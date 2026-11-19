@@ -701,6 +701,6 @@ date,location,storage,future_storage,irrigation,risk,severity,stress_days
 2026-11-18,Dettenhausen,95.46,132.89,12.5,SAFE,,
 2026-11-18,Gauting,53.98,84.49,6.0,SAFE,,
 2026-11-18,Waging am See,70.0,70.0,0.0,SAFE,,
-2026-11-19,Dettenhausen,101.97,132.9,6.0,SAFE,LOW,0.0
-2026-11-19,Gauting,56.93,94.91,3.1,SAFE,LOW,0.0
-2026-11-19,Waging am See,70.0,68.78,0.0,SAFE,LOW,0.0
+2026-11-19,Dettenhausen,101.97,111.77,6.0,SAFE,LOW,0.0
+2026-11-19,Gauting,56.93,60.61,3.1,SAFE,LOW,0.0
+2026-11-19,Waging am See,70.0,67.97,0.0,SAFE,LOW,0.0
