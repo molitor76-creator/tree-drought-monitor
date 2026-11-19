@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -239,7 +240,6 @@
             border: 1px solid var(--border);
         }
 
-        /* Darken standard OpenStreetMap tiles without an API key. */
         .leaflet-tile-pane {
             filter: invert(100%) hue-rotate(180deg)
                     brightness(85%) contrast(90%);
@@ -833,8 +833,7 @@
             {
                 attribution:
                     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                maxZoom: 19,
-                className: "dark-map-tiles"
+                maxZoom: 19
             }
         ).addTo(map);
 
@@ -912,7 +911,6 @@
         const chartInner = document.getElementById("chartInner");
         const chartScroll = document.getElementById("chartScroll");
 
-        // Allocate more horizontal space as daily history grows.
         const minimumWidth = Math.max(
             850,
             chartScroll.clientWidth
@@ -941,7 +939,6 @@
                 date => dataByDate[date] || null
             );
 
-            // Main storage history: solid line, severity-coloured points.
             datasets.push({
                 label: name,
                 data: locationRows.map(row =>
@@ -968,7 +965,6 @@
                 _rows: locationRows
             });
 
-            // Location-specific horizontal watering target.
             datasets.push({
                 label: name + " target (" + loc.target + " mm)",
                 data: dates.map(() => loc.target),
@@ -1008,20 +1004,31 @@
                             position: "top",
                             labels: {
                                 color: "#cbd5e1",
-                                usePointStyle: true,
-                                pointStyle: "line",
+                                usePointStyle: false,
+                                boxWidth: 28,
+                                boxHeight: 3,
                                 padding: 18,
-                                font: { size: 11 },
-                                filter: function(item, chartData) {
-                                    // Keep both storage and target entries
-                                    // in the legend.
-                                    return true;
+                                font: {
+                                    size: 11
+                                },
+                                generateLabels: function(chart) {
+                                    return chart.data.datasets.map(
+                                        (dataset, index) => ({
+                                            text: dataset.label,
+                                            datasetIndex: index,
+                                            hidden: !chart.isDatasetVisible(index),
+                                            strokeStyle: dataset.borderColor,
+                                            fillStyle: dataset.borderColor,
+                                            lineWidth: dataset.borderWidth || 2,
+                                            lineDash: dataset.borderDash || [],
+                                            lineCap: "butt"
+                                        })
+                                    );
                                 }
                             }
                         },
                         tooltip: {
                             filter: function(item) {
-                                // Do not show tooltips for target lines.
                                 return !item.dataset._isTarget;
                             },
                             backgroundColor: "#0b1220",
