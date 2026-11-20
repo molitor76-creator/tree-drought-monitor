@@ -239,10 +239,8 @@
             border: 1px solid var(--border);
         }
 
-        .leaflet-tile-pane {
-            filter: invert(100%) hue-rotate(180deg)
-                    brightness(85%) contrast(90%);
-        }
+        /* Normal light/day-mode OpenStreetMap tiles.
+           No inversion or dark-mode filter is applied. */
 
         .leaflet-control-attribution {
             font-size: 10px !important;
