@@ -1,10 +1,15 @@
 
 import os
+import re
+import json
 import time
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
+
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
+
 
 # Use the local date in Germany, not the GitHub runner's UTC date.
 today = datetime.now(ZoneInfo("Europe/Berlin")).date()
@@ -34,11 +39,163 @@ TARGET_FRACTION = 0.60
 CRITICAL_FRACTION = 0.25
 LOW_FRACTION = 0.50
 
-def get_weather(lat, lon):
+# Weather request settings.
+MAX_ATTEMPTS = 4
+RETRY_DELAYS = [15, 30, 60]
+DELAY_BETWEEN_LOCATIONS = 5
+REQUEST_TIMEOUT = 45
+
+
+def cache_filename(name):
+    """Create a separate weather cache file for each location."""
+    safe_name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return f"data/weather_cache_{safe_name}.json"
+
+
+def parse_retry_after(response):
     """
-    Retrieve 30 days of historical daily weather and 7 forecast days.
-    Values are indexed by calendar date to avoid relying on array positions.
+    Read the Retry-After header if Open-Meteo provides one.
+    Supports both seconds and HTTP date formats.
     """
+    value = response.headers.get("Retry-After")
+
+    if not value:
+        return None
+
+    try:
+        return max(0, min(int(value), 180))
+    except ValueError:
+        pass
+
+    try:
+        retry_time = parsedate_to_datetime(value)
+
+        if retry_time.tzinfo is None:
+            retry_time = retry_time.replace(tzinfo=timezone.utc)
+
+        seconds = (
+            retry_time - datetime.now(timezone.utc)
+        ).total_seconds()
+
+        return max(0, min(int(seconds), 180))
+
+    except Exception:
+        return None
+
+
+def convert_weather_response(data):
+    """Convert the Open-Meteo response into a date-indexed dictionary."""
+    daily = data["daily"]
+
+    dates = daily["time"]
+    rain_values = daily["precipitation_sum"]
+    et0_values = daily["et0_fao_evapotranspiration"]
+
+    if not (
+        len(dates) == len(rain_values) == len(et0_values)
+    ):
+        raise ValueError("Weather API returned inconsistent daily arrays")
+
+    weather_by_date = {}
+
+    for i, date_string in enumerate(dates):
+        rain = rain_values[i]
+        et0 = et0_values[i]
+
+        if rain is None or et0 is None:
+            raise ValueError(
+                f"Missing weather value for {date_string}"
+            )
+
+        weather_by_date[date_string] = {
+            "rain": float(rain),
+            "et0": float(et0)
+        }
+
+    if today_str not in weather_by_date:
+        raise ValueError("Today's weather data is missing")
+
+    return weather_by_date
+
+
+def save_weather_cache(cache_file, weather_data):
+    """Save a successful weather response without risking a partial file."""
+    cache = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "weather": weather_data
+    }
+
+    temporary_file = cache_file + ".tmp"
+
+    with open(temporary_file, "w", encoding="utf-8") as file:
+        json.dump(cache, file)
+
+    os.replace(temporary_file, cache_file)
+
+
+def load_weather_cache(cache_file, required_start_date):
+    """
+    Use cached weather only if it covers every date needed to calculate
+    storage from the previous history record through today.
+    """
+    if not os.path.exists(cache_file):
+        return None
+
+    try:
+        with open(cache_file, "r", encoding="utf-8") as file:
+            cache = json.load(file)
+
+        weather_data = cache["weather"]
+        fetched_at = cache.get("fetched_at", "unknown")
+
+        if today_str not in weather_data:
+            print("Cached weather does not contain today's date.")
+            return None
+
+        start_date = required_start_date
+
+        if start_date is None:
+            start_date = min(
+                datetime.strptime(d, "%Y-%m-%d").date()
+                for d in weather_data
+            )
+
+        current_date = start_date
+
+        while current_date <= today:
+            date_string = current_date.isoformat()
+
+            if date_string not in weather_data:
+                print(
+                    f"Cached weather is missing {date_string}; "
+                    "it cannot safely be used."
+                )
+                return None
+
+            current_date += timedelta(days=1)
+
+        print(
+            "Using cached weather as a temporary fallback. "
+            f"Last successful retrieval: {fetched_at}"
+        )
+
+        return weather_data
+
+    except Exception as error:
+        print(f"Could not read weather cache: {error}")
+        return None
+
+
+def get_weather(name, lat, lon, required_start_date):
+    """
+    Retrieve daily weather from Open-Meteo.
+
+    Uses progressively longer retries for rate limits and temporary
+    connection errors. Falls back to cached data only if the cache
+    contains all dates required for the soil-water calculation.
+    """
+    cache_file = cache_filename(name)
+
     url = (
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}"
@@ -49,47 +206,89 @@ def get_weather(lat, lon):
         "&timezone=Europe%2FBerlin"
     )
 
-    for attempt in range(3):
+    headers = {
+        "User-Agent": "TreeIrrigationMonitor/1.0"
+    }
+
+    for attempt in range(MAX_ATTEMPTS):
         try:
-            response = requests.get(url, timeout=30)
+            print(
+                f"Requesting weather for {name} "
+                f"(attempt {attempt + 1}/{MAX_ATTEMPTS})..."
+            )
+
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT
+            )
+
+            if response.status_code == 429:
+                retry_after = parse_retry_after(response)
+
+                if retry_after is not None:
+                    delay = retry_after
+                else:
+                    delay = RETRY_DELAYS[
+                        min(attempt, len(RETRY_DELAYS) - 1)
+                    ]
+
+                print(
+                    f"Open-Meteo rate limit reached for {name} "
+                    f"(HTTP 429). Waiting {delay} seconds."
+                )
+
+                if attempt < MAX_ATTEMPTS - 1:
+                    time.sleep(delay)
+
+                continue
+
             response.raise_for_status()
+
             data = response.json()
+            weather_data = convert_weather_response(data)
 
-            daily = data["daily"]
-            dates = daily["time"]
-            rain_values = daily["precipitation_sum"]
-            et0_values = daily["et0_fao_evapotranspiration"]
+            save_weather_cache(cache_file, weather_data)
 
-            weather_by_date = {}
+            print(f"Fresh weather data retrieved for {name}.")
 
-            for i, date_string in enumerate(dates):
-                rain = rain_values[i]
-                et0 = et0_values[i]
+            return weather_data
 
-                if rain is None or et0 is None:
-                    raise ValueError(
-                        f"Missing weather value for {date_string}"
-                    )
-
-                weather_by_date[date_string] = {
-                    "rain": float(rain),
-                    "et0": float(et0)
-                }
-
-            if today_str not in weather_by_date:
-                raise ValueError("Today's weather data is missing")
-
-            return weather_by_date
-
-        except Exception as error:
+        except requests.exceptions.RequestException as error:
             print(
                 f"Weather request attempt {attempt + 1} failed "
-                f"for {lat}, {lon}: {error}"
+                f"for {name}: {error}"
             )
-            time.sleep(2)
+
+        except (ValueError, KeyError, TypeError) as error:
+            print(
+                f"Invalid weather response for {name}: {error}"
+            )
+
+        if attempt < MAX_ATTEMPTS - 1:
+            delay = RETRY_DELAYS[
+                min(attempt, len(RETRY_DELAYS) - 1)
+            ]
+
+            print(f"Retrying in {delay} seconds...")
+            time.sleep(delay)
+
+    print(
+        f"Fresh weather retrieval failed for {name}. "
+        "Checking the local weather cache."
+    )
+
+    cached_data = load_weather_cache(
+        cache_file,
+        required_start_date
+    )
+
+    if cached_data is not None:
+        return cached_data
 
     raise RuntimeError(
-        f"Could not retrieve weather data for {lat}, {lon}"
+        f"No usable fresh or cached weather data for {name}. "
+        "Historical data has not been modified."
     )
 
 
@@ -131,20 +330,33 @@ def process_location(name, info, old_data, weather_data):
 
     if not old_data.empty:
         old_data = old_data.copy()
+
         old_data["date"] = pd.to_datetime(
             old_data["date"], errors="coerce"
         ).dt.date
-        old_data = old_data.dropna(subset=["date"])
+
+        old_data["storage"] = pd.to_numeric(
+            old_data["storage"], errors="coerce"
+        )
+
+        old_data = old_data.dropna(
+            subset=["date", "storage"]
+        )
+
         old_data = old_data.sort_values("date")
 
         if not old_data.empty:
             last = old_data.iloc[-1]
+
             previous_date = last["date"]
             storage = float(last["storage"])
 
             if "stress_days" in old_data.columns:
                 try:
-                    stress_days = int(last["stress_days"])
+                    value = last["stress_days"]
+                    stress_days = (
+                        0 if pd.isna(value) else int(value)
+                    )
                 except (TypeError, ValueError):
                     stress_days = 0
 
@@ -164,9 +376,11 @@ def process_location(name, info, old_data, weather_data):
     ):
         storage = capacity * 0.80
         stress_days = 0
+
         dates_to_process = [
             d for d in weather_dates if d <= today
         ]
+
     else:
         dates_to_process = [
             d for d in weather_dates
@@ -189,11 +403,9 @@ def process_location(name, info, old_data, weather_data):
         else:
             stress_days = 0
 
-    # If this is a repeat run on the same day, storage is not
-    # recalculated from today's weather a second time.
     storage = round(storage, 2)
 
-    # Calculate the next seven days using the forecast.
+    # Calculate the available forecast days.
     forecast_dates = [
         d for d in weather_dates if d > today
     ][:7]
@@ -202,6 +414,7 @@ def process_location(name, info, old_data, weather_data):
 
     for forecast_date in forecast_dates:
         day = weather_data[forecast_date.isoformat()]
+
         future_storage = advance_storage(
             future_storage,
             day["rain"],
@@ -240,6 +453,32 @@ def process_location(name, info, old_data, weather_data):
     }
 
 
+def get_required_start_date(old_data):
+    """
+    Determine the earliest date needed from weather data.
+    The model uses at most the 30-day historical API window when
+    initialising a location without usable recent history.
+    """
+    earliest_available = today - timedelta(days=30)
+
+    if old_data.empty:
+        return earliest_available
+
+    dates = pd.to_datetime(
+        old_data["date"], errors="coerce"
+    ).dropna()
+
+    if dates.empty:
+        return earliest_available
+
+    last_date = dates.max().date()
+
+    if last_date >= today:
+        return today
+
+    return max(last_date + timedelta(days=1), earliest_available)
+
+
 def main():
     os.makedirs("data", exist_ok=True)
 
@@ -263,6 +502,7 @@ def main():
             column for column in required_columns
             if column not in old.columns
         ]
+
         if missing:
             raise RuntimeError(
                 "Existing history.csv is missing columns: "
@@ -271,13 +511,8 @@ def main():
 
     new_rows = []
 
-    for name, info in locations.items():
+    for index, (name, info) in enumerate(locations.items()):
         print(f"Processing {name}...")
-
-        weather_data = get_weather(
-            info["lat"],
-            info["lon"]
-        )
 
         if not old.empty:
             location_history = old[
@@ -285,6 +520,17 @@ def main():
             ].copy()
         else:
             location_history = pd.DataFrame()
+
+        required_start_date = get_required_start_date(
+            location_history
+        )
+
+        weather_data = get_weather(
+            name,
+            info["lat"],
+            info["lon"],
+            required_start_date
+        )
 
         result = process_location(
             name,
@@ -302,6 +548,15 @@ def main():
             f"severity={result['severity']}"
         )
 
+        # Avoid sending requests for all three locations too rapidly.
+        if index < len(locations) - 1:
+            print(
+                f"Waiting {DELAY_BETWEEN_LOCATIONS} seconds "
+                "before the next location..."
+            )
+            time.sleep(DELAY_BETWEEN_LOCATIONS)
+
+    # Only update history after all three locations have been processed.
     new_data = pd.DataFrame(new_rows)
 
     if old.empty:
@@ -338,6 +593,7 @@ def main():
     ]
 
     combined = combined.reindex(columns=columns)
+
     combined = combined.sort_values(
         ["date", "location"]
     )
